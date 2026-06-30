@@ -59,7 +59,9 @@
                 "tertiary-fixed-dim": "#bcc7de",
                 "secondary-fixed-dim": "#b9c7e0",
                 "on-secondary": "#ffffff",
-                "on-primary-fixed-variant": "#92001c"
+                "on-primary-fixed-variant": "#92001c",
+                "gradient-start": "#FE0406",
+                "gradient-end": "#FFFFFF"
             },
             "borderRadius": {
                 "DEFAULT": "0.125rem",
@@ -146,7 +148,7 @@
         }
     </style>
 </head>
-<body class="bg-background font-body-md text-on-background">
+<body class="min-h-screen font-body-md text-on-background bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
     <div id="root"></div>
 
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -196,8 +198,8 @@
                         {showUser && (
                             <div className="flex items-center gap-md">
                                 <div className="flex flex-col items-end">
-                                    <span className="font-label-md text-label-md text-on-background font-bold">Juan R. Dela Cruz</span>
-                                    <span className="font-mono-data text-[10px] text-secondary">TUPM-21-0452</span>
+                                    <span className="font-label-md text-label-md text-on-background font-bold">TUPM-23-1111</span>
+                                    <span className="font-mono-data text-[10px] text-secondary">Student</span>
                                 </div>
                                 <div className="w-10 h-10 rounded-full border-2 border-primary overflow-hidden bg-surface-container-high">
                                     <img alt="Profile" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnIVa-fKZ6BeyKzzv67vVJJqH2R4ZM2wTJ_rRjvSkehz7kR5R02mWtFn5RAq15JCFtAdRiTdpiNoLoiu-5XhmAG2ty8dhhOzGItNaRUECiEK-fBVH7Bw9YWHkHIqCeGzyvZlZcbHfGCdyq3vFUyEFsDpEmSK-92TeZQxBygfUlkoqV5xsP8xqBi1YlsRnIkiUlprmbsRGhxhwQyIim1afOdGJYspK3TUpsjNCWeE6VXFy6cDqKilhbfUquru9IXDlnE_EjleGZcANl" />
@@ -243,7 +245,7 @@
             }, []);
 
             return (
-                <div className="bg-background text-on-background min-h-screen flex flex-col overflow-hidden select-none">
+                <div className="text-on-background min-h-screen flex flex-col">
                     <header className="fixed top-0 w-full z-50 flex justify-between items-start px-lg py-md bg-surface border-b border-outline-variant">
                         <div className="flex items-center gap-md">
                             <div className="w-12 h-12 bg-primary flex items-center justify-center rounded">
@@ -269,7 +271,7 @@
                         <div className="absolute inset-0 industrial-grid pointer-events-none opacity-20"></div>
                         <div className="relative z-10 text-center max-w-4xl w-full flex flex-col items-center">
                             <div className="mb-xl">
-                                <h2 className="font-display-lg text-display-lg text-on-background mb-sm">Welcome, Scholar</h2>
+                                <h2 className="font-display-lg text-display-lg text-on-background mb-sm">Welcome, TUPM-23-1111</h2>
                                 <p className="font-body-lg text-body-lg text-secondary">Please scan your Student QR Code to begin your session</p>
                             </div>
                             <div className="relative group cursor-pointer" onClick={() => navigate('/commands')}>
@@ -324,7 +326,7 @@
                     <main className="flex-grow flex flex-col items-center justify-center pt-xl px-lg mt-16 relative">
                         <div className="w-full max-w-6xl z-10 py-xl">
                             <div className="mb-xl text-center">
-                                <h2 className="font-headline-lg text-headline-lg text-on-background">Welcome back, Engineer Dela Cruz</h2>
+                                <h2 className="font-headline-lg text-headline-lg text-on-background">Welcome back, TUPM-23-1111</h2>
                                 <div className="flex items-center justify-center gap-sm mt-xs">
                                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                     <span className="font-label-md text-label-md text-secondary uppercase tracking-widest">Authenticated & Validated System Access</span>
@@ -459,7 +461,7 @@
             ];
 
             return (
-                <div className="bg-surface min-h-screen flex flex-col">
+                <div className="min-h-screen flex flex-col">
                     <TopBar />
                     <main className="pt-24 px-lg pb-xl flex flex-col max-w-screen-2xl mx-auto w-full">
                         <header className="mb-lg">
@@ -490,7 +492,7 @@
         const ScreenToolRelease = () => {
             const navigate = useNavigate();
             return (
-                <div className="bg-background min-h-screen flex flex-col">
+                <div className="min-h-screen flex flex-col">
                     <TopBar />
                     <main className="max-w-6xl mx-auto pt-32 pb-12 px-lg">
                         <div className="text-center mb-xl">
@@ -554,7 +556,7 @@
                                         <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFUz-d2JCnGB5dUz_gbEthmXi9u8DeefrEhHcg4UbAE6j2DN63VWnJDWDFOwo4j9u1aErjbRWJ9Rx4N5FYTLMoBTdOx-wXl14eJFM-Fi_nKh442THwPOPL5v6LHi7OSwwenWJJ_ahrvFT5AuibKVLUA-Fxz60Q58S9eeKASzZDoDJyShCahjGXhi402H_odLarVsBf2aR48tjU-fIJFtZObBy0C_PCWqiGJQreD0K0JSU4p4xWLHKSyxFoV_FU5ZcOspJOoM40dpqG" />
                                     </div>
                                     <div className="flex-grow">
-                                        <h2 className="font-headline-md">Juan R. Dela Cruz</h2>
+                                        <h2 className="font-headline-md">TUPM-23-1111</h2>
                                         <span className="font-mono-data text-secondary">ID: 2021-00452-MN-0</span>
                                     </div>
                                 </div>
@@ -675,13 +677,13 @@
                                         </thead>
                                         <tbody className="divide-y text-sm">
                                             <tr>
-                                                <td className="p-4 font-bold">TUPM-21-0955</td>
+                                                <td className="p-4 font-bold">TUPM-23-1111</td>
                                                 <td className="p-4">Digital Multimeter</td>
                                                 <td className="p-4 text-emerald-600">Active (1h left)</td>
                                                 <td className="p-4"><button className="text-primary font-bold">Manage</button></td>
                                             </tr>
                                             <tr>
-                                                <td className="p-4 font-bold text-primary">TUPM-21-0842</td>
+                                                <td className="p-4 font-bold text-primary">TUPM-23-1111</td>
                                                 <td className="p-4">Oscilloscope</td>
                                                 <td className="p-4 text-primary">Overdue (-45m)</td>
                                                 <td className="p-4"><button className="text-primary font-bold">Notify</button></td>
