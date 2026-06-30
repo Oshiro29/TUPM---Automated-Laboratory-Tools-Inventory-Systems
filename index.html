@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>TUP-Manila Inventory | Intelligent Lab Management</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "on-secondary-fixed-variant": "#3a485c",
+                "on-error-container": "#93000a",
+                "background": "#f7f9fb",
+                "on-background": "#191c1e",
+                "error-container": "#ffdad6",
+                "on-primary-container": "#ffdad8",
+                "tertiary": "#424d61",
+                "surface-bright": "#f7f9fb",
+                "inverse-surface": "#2d3133",
+                "on-tertiary-fixed": "#111c2d",
+                "surface-dim": "#d8dadc",
+                "outline-variant": "#e5bdbb",
+                "surface-variant": "#e0e3e5",
+                "on-secondary-container": "#57657b",
+                "on-tertiary-container": "#d8e3fb",
+                "surface-container-lowest": "#ffffff",
+                "on-surface-variant": "#5c403f",
+                "tertiary-container": "#5a6579",
+                "surface-container-high": "#e6e8ea",
+                "inverse-primary": "#ffb3b1",
+                "secondary-container": "#d5e3fd",
+                "on-tertiary": "#ffffff",
+                "outline": "#906f6e",
+                "secondary": "#515f74",
+                "secondary-fixed": "#d5e3fd",
+                "surface-container-highest": "#e0e3e5",
+                "error": "#ba1a1a",
+                "primary-container": "#c8102e",
+                "surface-tint": "#bf0229",
+                "on-primary-fixed": "#410007",
+                "primary": "#9e001f",
+                "on-primary": "#ffffff",
+                "on-surface": "#191c1e",
+                "on-error": "#ffffff",
+                "surface-container": "#eceef0",
+                "surface": "#f7f9fb",
+                "tertiary-fixed": "#d8e3fb",
+                "surface-container-low": "#f2f4f6",
+                "inverse-on-surface": "#eff1f3",
+                "primary-fixed": "#ffdad8",
+                "primary-fixed-dim": "#ffb3b1",
+                "on-secondary-fixed": "#0d1c2f",
+                "on-tertiary-fixed-variant": "#3c475a",
+                "tertiary-fixed-dim": "#bcc7de",
+                "secondary-fixed-dim": "#b9c7e0",
+                "on-secondary": "#ffffff",
+                "on-primary-fixed-variant": "#92001c"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+            },
+            "spacing": {
+                "sm": "8px",
+                "base": "4px",
+                "xl": "40px",
+                "container-max": "1440px",
+                "gutter": "16px",
+                "xs": "4px",
+                "lg": "24px",
+                "md": "16px"
+            },
+            "fontFamily": {
+                "body-md": ["Inter"],
+                "mono-data": ["JetBrains Mono"],
+                "headline-lg-mobile": ["Inter"],
+                "display-lg": ["Inter"],
+                "label-md": ["Inter"],
+                "body-lg": ["Inter"],
+                "title-lg": ["Inter"],
+                "headline-lg": ["Inter"],
+                "headline-md": ["Inter"]
+            },
+            "fontSize": {
+                "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                "mono-data": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .industrial-grid {
+            background-image: radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .vignette-overlay {
+            background: radial-gradient(circle, transparent 70%, rgba(200, 16, 46, 0.03) 100%);
+        }
+        @keyframes scan {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(280px); }
+            100% { transform: translateY(0); }
+        }
+        .scan-line {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #c8102e, transparent);
+            box-shadow: 0 0 15px #c8102e;
+            animation: scan 3s linear infinite;
+        }
+        .grid-dots {
+            background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        @keyframes pulse-red {
+            0%, 100% { background-color: #c8102e; border-color: #9e001f; color: white; }
+            50% { background-color: #ffdad8; border-color: #c8102e; color: #9e001f; }
+        }
+        .animate-pulse-red {
+            animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .unlocked-highlight {
+            animation: pulse-highlight 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            border-width: 2px;
+        }
+        @keyframes pulse-highlight {
+            0%, 100% { background-color: rgba(200, 16, 46, 0.1); border-color: #c8102e; }
+            50% { background-color: rgba(200, 16, 46, 0.25); border-color: #9e001f; }
+        }
+    </style>
+</head>
+<body class="bg-background font-body-md text-on-background">
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/history@5/umd/history.development.js"></script>
+    <script src="https://unpkg.com/react-router@6.3.0/umd/react-router.development.js"></script>
+    <script src="https://unpkg.com/react-router-dom@6.3.0/umd/react-router-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { createRoot } = ReactDOM;
+        const { MemoryRouter, Routes, Route, Link, useNavigate, useLocation } = ReactRouterDOM;
+
+        // --- Common Components ---
+
+        const TopBar = ({ showUser = true, title = "TUP-Manila Inventory", timer = true }) => {
+            const [timeLeft, setTimeLeft] = useState(119);
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
+                }, 1000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            const timerStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            const isDanger = timeLeft < 30;
+
+            return (
+                <header className="fixed top-0 w-full z-50 flex justify-between items-center px-lg py-md bg-surface border-b border-outline-variant">
+                    <div className="flex items-center gap-md">
+                        <div className="w-10 h-10 bg-primary flex items-center justify-center rounded-lg shadow-sm">
+                            <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>precision_manufacturing</span>
+                        </div>
+                        <h1 className="font-headline-md text-headline-md font-bold text-primary tracking-tight">{title}</h1>
+                    </div>
+                    <div className="flex items-center gap-lg">
+                        {timer && (
+                            <div className={`flex items-center gap-sm px-md py-xs rounded-full border border-outline-variant ${isDanger ? 'bg-error-container border-error' : 'bg-surface-container'}`}>
+                                <span className={`material-symbols-outlined text-[20px] ${isDanger ? 'text-error animate-pulse' : 'text-primary'}`}>timer</span>
+                                <span className={`font-mono-data text-mono-data font-bold ${isDanger ? 'text-error' : 'text-primary'}`}>{timerStr}</span>
+                            </div>
+                        )}
+                        <div className="h-8 w-[1px] bg-outline-variant"></div>
+                        {showUser && (
+                            <div className="flex items-center gap-md">
+                                <div className="flex flex-col items-end">
+                                    <span className="font-label-md text-label-md text-on-background font-bold">Juan R. Dela Cruz</span>
+                                    <span className="font-mono-data text-[10px] text-secondary">TUPM-21-0452</span>
+                                </div>
+                                <div className="w-10 h-10 rounded-full border-2 border-primary overflow-hidden bg-surface-container-high">
+                                    <img alt="Profile" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnIVa-fKZ6BeyKzzv67vVJJqH2R4ZM2wTJ_rRjvSkehz7kR5R02mWtFn5RAq15JCFtAdRiTdpiNoLoiu-5XhmAG2ty8dhhOzGItNaRUECiEK-fBVH7Bw9YWHkHIqCeGzyvZlZcbHfGCdyq3vFUyEFsDpEmSK-92TeZQxBygfUlkoqV5xsP8xqBi1YlsRnIkiUlprmbsRGhxhwQyIim1afOdGJYspK3TUpsjNCWeE6VXFy6cDqKilhbfUquru9IXDlnE_EjleGZcANl" />
+                                </div>
+                                <button className="p-xs hover:bg-surface-container transition-colors duration-200 text-secondary rounded-full">
+                                    <span className="material-symbols-outlined">notifications</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </header>
+            );
+        };
+
+        const Footer = () => (
+            <footer className="w-full h-12 bg-surface-container-highest border-t border-outline-variant flex items-center px-lg justify-between fixed bottom-0">
+                <div className="flex items-center gap-lg text-secondary">
+                    <div className="flex items-center gap-xs">
+                        <span className="material-symbols-outlined text-[18px]">wifi</span>
+                        <span className="font-label-md text-label-md">TUPM-Secure-Grid</span>
+                    </div>
+                    <div className="flex items-center gap-xs">
+                        <span className="material-symbols-outlined text-[18px]">update</span>
+                        <span className="font-label-md text-label-md">Last Sync: Just Now</span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-sm">
+                    <span className="font-label-md text-label-md text-secondary uppercase tracking-widest">Industrial Precision Interface</span>
+                    <span className="w-2 h-2 rounded-full bg-primary"></span>
+                    <span className="font-mono-data text-mono-data text-[10px] text-secondary">v2.4.0-REL</span>
+                </div>
+            </footer>
+        );
+
+        // --- Screens ---
+
+        const ScreenWelcome = () => {
+            const navigate = useNavigate();
+            const [time, setTime] = useState(new Date());
+            useEffect(() => {
+                const interval = setInterval(() => setTime(new Date()), 1000);
+                return () => clearInterval(interval);
+            }, []);
+
+            return (
+                <div className="bg-background text-on-background min-h-screen flex flex-col overflow-hidden select-none">
+                    <header className="fixed top-0 w-full z-50 flex justify-between items-start px-lg py-md bg-surface border-b border-outline-variant">
+                        <div className="flex items-center gap-md">
+                            <div className="w-12 h-12 bg-primary flex items-center justify-center rounded">
+                                <span className="material-symbols-outlined text-white text-3xl">precision_manufacturing</span>
+                            </div>
+                            <div>
+                                <h1 className="font-headline-md text-headline-md font-bold text-primary leading-tight">TUP-Manila Inventory</h1>
+                                <p className="font-label-md text-label-md text-secondary tracking-widest uppercase">Automated Lab Tools System</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-lg">
+                            <div className="flex items-center gap-sm px-md py-sm bg-surface-container border border-outline-variant rounded mt-1">
+                                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                <span className="font-mono-data text-label-md text-secondary uppercase tracking-tight">SYSTEM STATUS: <span className="text-emerald-600 font-bold">ONLINE</span></span>
+                            </div>
+                            <div className="text-right">
+                                <div className="font-mono-data text-headline-md font-bold text-on-background">{time.toLocaleTimeString('en-GB')}</div>
+                                <div className="font-label-md text-label-md text-secondary uppercase tracking-wider">{time.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}</div>
+                            </div>
+                        </div>
+                    </header>
+                    <main className="flex-1 relative flex flex-col items-center justify-center p-xl pt-32">
+                        <div className="absolute inset-0 industrial-grid pointer-events-none opacity-20"></div>
+                        <div className="relative z-10 text-center max-w-4xl w-full flex flex-col items-center">
+                            <div className="mb-xl">
+                                <h2 className="font-display-lg text-display-lg text-on-background mb-sm">Welcome, Scholar</h2>
+                                <p className="font-body-lg text-body-lg text-secondary">Please scan your Student QR Code to begin your session</p>
+                            </div>
+                            <div className="relative group cursor-pointer" onClick={() => navigate('/commands')}>
+                                <div className="absolute -top-4 -left-4 w-12 h-12 border-t-4 border-l-4 border-primary"></div>
+                                <div className="absolute -top-4 -right-4 w-12 h-12 border-t-4 border-r-4 border-primary"></div>
+                                <div className="absolute -bottom-4 -left-4 w-12 h-12 border-b-4 border-l-4 border-primary"></div>
+                                <div className="absolute -bottom-4 -right-4 w-12 h-12 border-b-4 border-r-4 border-primary"></div>
+                                <div className="w-80 bg-surface-container-lowest border border-outline p-md relative overflow-hidden flex items-center justify-center h-64">
+                                    <div className="scan-line absolute top-0 left-0 w-full z-20"></div>
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-outline-variant opacity-40">
+                                        <span className="material-symbols-outlined text-[160px]">qr_code_scanner</span>
+                                    </div>
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-on-background/5 backdrop-blur-[1px]">
+                                        <div className="bg-primary px-lg py-sm text-on-primary font-label-md rounded-full shadow-lg">READY TO SCAN</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="w-full max-w-md mt-lg flex flex-col items-center">
+                                <div className="flex items-center w-full gap-md mb-lg">
+                                    <div className="flex-1 h-px bg-outline-variant"></div>
+                                    <span className="font-mono-data text-label-md text-secondary uppercase tracking-widest">OR</span>
+                                    <div className="flex-1 h-px bg-outline-variant"></div>
+                                </div>
+                                <div className="w-full bg-surface-container-low border border-outline-variant p-lg rounded-lg">
+                                    <div className="flex gap-sm">
+                                        <input className="flex-1 bg-surface-container-lowest border border-outline-variant px-md py-sm font-body-md text-on-background focus:outline-none focus:border-primary rounded" placeholder="Enter Student ID (e.g., 2021-XXXXX-MN-0)" type="text" />
+                                        <button onClick={() => navigate('/commands')} className="bg-primary text-on-primary px-lg py-sm font-label-md uppercase tracking-wider rounded hover:bg-primary-container transition-colors">Continue</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                    <footer className="p-md bg-surface-container-low border-t border-outline-variant flex justify-center gap-xl">
+                        <div className="flex items-center gap-sm">
+                            <span className="material-symbols-outlined text-secondary text-sm">security</span>
+                            <span className="font-label-md text-label-md text-secondary">Encrypted Connection</span>
+                        </div>
+                        <div className="flex items-center gap-sm" onClick={() => navigate('/admin')}>
+                            <span className="material-symbols-outlined text-secondary text-sm">admin_panel_settings</span>
+                            <span className="font-label-md text-label-md text-secondary cursor-pointer">Admin Panel</span>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const ScreenCommands = () => {
+            const navigate = useNavigate();
+            return (
+                <div className="industrial-grid min-h-screen flex flex-col vignette-overlay">
+                    <TopBar />
+                    <main className="flex-grow flex flex-col items-center justify-center pt-xl px-lg mt-16 relative">
+                        <div className="w-full max-w-6xl z-10 py-xl">
+                            <div className="mb-xl text-center">
+                                <h2 className="font-headline-lg text-headline-lg text-on-background">Welcome back, Engineer Dela Cruz</h2>
+                                <div className="flex items-center justify-center gap-sm mt-xs">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span className="font-label-md text-label-md text-secondary uppercase tracking-widest">Authenticated & Validated System Access</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-md mb-lg">
+                                <div className="h-[1px] flex-grow bg-outline-variant"></div>
+                                <p className="font-title-lg text-title-lg text-secondary uppercase tracking-widest whitespace-nowrap px-md">Select a transaction to proceed</p>
+                                <div className="h-[1px] flex-grow bg-outline-variant"></div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-xl max-w-5xl mx-auto h-[440px]">
+                                <button onClick={() => navigate('/deposit')} className="group relative flex flex-col items-center justify-center bg-white border-2 border-outline-variant rounded-xl p-xl shadow-sm hover:border-primary hover:shadow-2xl transition-all duration-300 overflow-hidden text-left">
+                                    <div className="absolute top-0 left-0 w-2 h-full bg-primary opacity-20 group-hover:opacity-100 transition-opacity"></div>
+                                    <div className="mb-lg w-24 h-24 bg-primary-fixed rounded-2xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                        <span className="material-symbols-outlined text-[64px]" style={{ fontVariationSettings: "'FILL' 1" }}>outbound</span>
+                                    </div>
+                                    <span className="font-display-lg text-display-lg text-on-background tracking-tighter mb-sm">BORROW</span>
+                                    <p className="font-body-lg text-body-lg text-secondary max-w-[320px] text-center">Checkout equipment, tools, or laboratory kits for authorized use.</p>
+                                    <span className="absolute -bottom-4 -right-4 font-display-lg text-[140px] text-surface-container opacity-5 select-none pointer-events-none">01</span>
+                                </button>
+                                <button onClick={() => navigate('/return-confirm')} className="group relative flex flex-col items-center justify-center bg-white border-2 border-outline-variant rounded-xl p-xl shadow-sm hover:border-on-secondary-container hover:shadow-2xl transition-all duration-300 overflow-hidden text-left">
+                                    <div className="absolute top-0 right-0 w-2 h-full bg-secondary opacity-20 group-hover:opacity-100 transition-opacity"></div>
+                                    <div className="mb-lg w-24 h-24 bg-secondary-container rounded-2xl flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
+                                        <span className="material-symbols-outlined text-[64px]" style={{ fontVariationSettings: "'FILL' 1" }}>inventory_2</span>
+                                    </div>
+                                    <span className="font-display-lg text-display-lg text-on-background tracking-tighter mb-sm">RETURN</span>
+                                    <p className="font-body-lg text-body-lg text-secondary max-w-[320px] text-center">Log items back into the inventory system after use.</p>
+                                    <span className="absolute -bottom-4 -right-4 font-display-lg text-[140px] text-surface-container opacity-5 select-none pointer-events-none">02</span>
+                                </button>
+                            </div>
+                            <div className="mt-xl flex justify-between items-center px-md max-w-5xl mx-auto">
+                                <Link to="/" className="flex items-center gap-md px-lg py-md border-2 border-outline text-on-surface-variant font-bold rounded-lg hover:bg-error-container hover:text-on-error-container hover:border-error transition-all duration-200">
+                                    <span className="material-symbols-outlined">cancel</span>
+                                    <span className="font-title-lg text-title-lg uppercase">Cancel Session</span>
+                                </Link>
+                                <div className="flex items-center gap-lg">
+                                    <div className="flex flex-col items-end">
+                                        <span className="font-label-md text-label-md text-secondary uppercase">Current Station</span>
+                                        <span className="font-title-lg text-title-lg text-on-background font-bold">LAB-KIO-04</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                    <Footer />
+                </div>
+            );
+        };
+
+        const ScreenDeposit = () => {
+            const navigate = useNavigate();
+            const [status, setStatus] = useState("Waiting for coin...");
+            const [progress, setProgress] = useState(0);
+            const [isSuccess, setIsSuccess] = useState(false);
+
+            useEffect(() => {
+                const timer1 = setTimeout(() => {
+                    setStatus("Analyzing entry...");
+                    setProgress(40);
+                }, 2000);
+                const timer2 = setTimeout(() => {
+                    setStatus("Verifying denomination...");
+                    setProgress(85);
+                }, 4000);
+                const timer3 = setTimeout(() => {
+                    setStatus("Verified");
+                    setProgress(100);
+                    setIsSuccess(true);
+                    setTimeout(() => navigate('/tool-selection'), 1500);
+                }, 6000);
+                return () => { clearTimeout(timer1); clearTimeout(timer2); clearTimeout(timer3); };
+            }, [navigate]);
+
+            return (
+                <div className="bg-background text-on-background min-h-screen flex flex-col overflow-hidden">
+                    <TopBar />
+                    <main className="flex-grow flex items-center justify-center pt-24 px-lg relative">
+                        <div className="absolute inset-0 opacity-5 pointer-events-none overflow-hidden">
+                            <div className="grid grid-cols-12 h-full w-full">
+                                {[...Array(12)].map((_, i) => <div key={i} className="border-r border-outline h-full"></div>)}
+                            </div>
+                        </div>
+                        <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-xl items-center z-10">
+                            <div className="space-y-lg">
+                                <h2 className="font-display-lg text-display-lg text-on-surface leading-tight">
+                                    Please Insert <span className="text-primary">₱10.00</span>
+                                </h2>
+                                <p className="font-body-lg text-body-lg text-secondary max-w-md">
+                                    To proceed with the equipment rental, please insert a single ten-peso coin into the deposit slot.
+                                </p>
+                                <div className={`flex items-center gap-md p-md rounded-xl border transition-all duration-300 ${isSuccess ? 'bg-emerald-50 border-emerald-500' : 'bg-surface-container border-outline-variant'}`}>
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isSuccess ? 'bg-emerald-600' : 'bg-secondary/10 animate-pulse'}`}>
+                                        <span className={`material-symbols-outlined ${isSuccess ? 'text-white' : 'text-secondary'}`}>{isSuccess ? 'check_circle' : 'pending'}</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-title-lg text-title-lg text-on-surface">{status}</span>
+                                        <span className="font-label-md text-label-md text-secondary uppercase">Coin Acceptor: Ready</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="relative flex flex-col items-center">
+                                <div className="w-72 h-72 relative flex items-center justify-center">
+                                    <div className="absolute inset-0 border-2 border-dashed border-outline-variant rounded-full animate-[spin_20s_linear_infinite]"></div>
+                                    <div className={`w-60 h-60 relative transition-transform duration-500 ${isSuccess ? 'scale-110' : ''}`}>
+                                        <div className="w-full h-full bg-surface-container-highest rounded-full border-4 border-outline-variant flex items-center justify-center overflow-hidden shadow-2xl relative">
+                                            <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDb8ZfgJp9xoxaPzJ0QAv57VuNPD2_ltiWWMTyPWrpAQpvNY-c5AVIPaC2-zTSC7jV0ncfwBF5w6XW_wf19jVU3Aqmq3ur87poe_lxQjk8CFczXtWCIpIHvVW2yWkPlaY16ygDdRKIL9T9HwnChy6Eo5tKaAtBPKCeeaCXs-QdcM1shLtHc-5YPLGC1Q3O28w6tKyPVIuldCBx_fUn3M6l6PvGy5XDu2cY8k6kBybN-ajmF3TbRky74jMEuYjuWNpScDv8LB6abI4ff" />
+                                            {isSuccess && (
+                                                <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                                                    <span className="material-symbols-outlined text-white text-8xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-lg w-full max-w-xs h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                                    <div className={`h-full transition-all duration-500 ${isSuccess ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${progress}%` }}></div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const ScreenToolSelection = () => {
+            const navigate = useNavigate();
+            const tools = [
+                { id: 1, name: "Multimeter", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAlhEF5UXKxeCCNsU8xZhci1vX_NyyMF46IfBNXjSQTvjTCpg5X45yd6NkR6Hdk6edyBcFWH46LKsFscV7rPV0nKHia2qtAoGPPIVYjGOYCHQRrM-b8qW21TNb2Wj2Mk2VXJ0PsN9AjyNGQD-A0h7-9rA9srj_PqTTUIFBAbXfRZDkhQLQPkid9LaE5YpPx6ryTOJVYZtTEqLLdiqHp5bXgBuiHh7pDWB5h3jIK6_Otnneh4NZdqmByHVoj2vwZ_UhxVCxcTJNx8MUn", desc: "High-precision digital units for measuring voltage, current, and resistance.", av: "3/5" },
+                { id: 2, name: "Soldering Iron", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuA0nHGMP0AtxCiQHKPjfqfVx_psk6md1KcXHX9Im9jmgmLaRYM37jncuSDV4BMvrdOeVQmHIHZQIfnOmKWEKlhs72Bmdf2Thr0zywxrBSV_2-f7QbsiuFoekktOI2We9VLuSAkpDVZLJP2_SkBW_ThVoPBZZ2RPhYwc55Of2cGp-RLwawipT6fCU0ahT8V_-2jkag2o7XzimvWi5h5l7EBvzYHuRCw8wtsojuZ_zUlBcH7-ppvTxN92xlrKfOCCb4TLuGRgSPKJMI0a", desc: "Temperature-controlled stations suitable for SMD and through-hole soldering.", av: "2/4" },
+                { id: 3, name: "Oscilloscope", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuDAApt3rhQ1UhHv3lzaJ7EwIOGPZCHSf6YWkwaUZVxgeazJDjQr16g_Fjrtrvv5VL0qWbVdSZNhJo8wNH9EfpIhOc-YZP3skd7MpytiJ37TfsRt3S6c9GYKfwXx7BARpeylIAEoemUnZWrYXeRaoyXP2nqrdSQvko8ofHjn5b90JekIJL_DwUwzOaU4avQR84gB2TPbqbnl4m4eANpahj_d4v2d03-iymmO2gqnTfmC7xEr8Gav_-fULU84BjwOvs8c92DRewfw9lTj", desc: "Two-channel digital storage oscilloscopes for waveform analysis and debugging.", av: "1/2" },
+                { id: 4, name: "Tool Kit", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAD4Hx69rbrjVXTKrmPAXHubnV9J0pfUIcXM5lc8VfBJ15_2GRlzIXP3PQtPdydqBzXdPgjz1vZz2A0eJ1PN2QHA1vpfc5mG3hlQB_68NtG2dm0MCCBeIFpmiiCOospa7cru8sv49kWdTR3fOD8fpaYNKRSMec45J1myxTb3PMkG-jCXd7g8XX97e6BVaswYFigyYLPtcy4elCS9ISYSLhgeW2odz4wlzCZEjg4OlsN-p83exXYHsxkEy74GdVsRVC-K0EfX67Ccef4", desc: "Complete sets including screwdrivers, pliers, wire strippers, and basic hand tools.", av: "6/8" }
+            ];
+
+            return (
+                <div className="bg-surface min-h-screen flex flex-col">
+                    <TopBar />
+                    <main className="pt-24 px-lg pb-xl flex flex-col max-w-screen-2xl mx-auto w-full">
+                        <header className="mb-lg">
+                            <h1 className="font-headline-lg text-headline-lg text-on-background">Select the tool you wish to borrow</h1>
+                            <p className="font-body-lg text-body-lg text-secondary mt-xs">Choose from the available high-precision laboratory equipment.</p>
+                        </header>
+                        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-md flex-1">
+                            {tools.map(tool => (
+                                <div key={tool.id} onClick={() => navigate('/tool-release')} className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden cursor-pointer hover:shadow-xl transition-all">
+                                    <div className="aspect-video relative bg-surface-container">
+                                        <img className="w-full h-full object-cover" src={tool.img} alt={tool.name} />
+                                        <div className="absolute top-md right-md bg-emerald-500 text-white font-label-md px-md py-xs rounded-full">{tool.av} Available</div>
+                                    </div>
+                                    <div className="p-lg flex-1 flex flex-col">
+                                        <h3 className="font-title-lg text-title-lg mb-sm">{tool.name}</h3>
+                                        <p className="font-body-md text-secondary mb-lg flex-1">{tool.desc}</p>
+                                        <button className="w-full py-md bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary font-label-md rounded-lg transition-all">SELECT TOOL</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </section>
+                    </main>
+                    <Footer />
+                </div>
+            );
+        };
+
+        const ScreenToolRelease = () => {
+            const navigate = useNavigate();
+            return (
+                <div className="bg-background min-h-screen flex flex-col">
+                    <TopBar />
+                    <main className="max-w-6xl mx-auto pt-32 pb-12 px-lg">
+                        <div className="text-center mb-xl">
+                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 mb-md">
+                                <span className="material-symbols-outlined text-emerald-600 text-5xl">lock_open</span>
+                            </div>
+                            <h2 className="font-display-lg text-display-lg text-on-surface mb-xs">Compartment Unlocked</h2>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-xl">
+                            <div className="lg:col-span-7 bg-surface-container-lowest p-lg rounded-xl border border-outline-variant shadow-sm">
+                                <h3 className="font-title-lg text-primary flex items-center gap-sm mb-lg">Unit A-01 Map</h3>
+                                <div className="grid grid-cols-4 gap-3">
+                                    {[...Array(12)].map((_, i) => (
+                                        <div key={i} className={`h-24 rounded flex flex-col items-center justify-center border ${i === 2 ? 'animate-pulse-red shadow-lg border-primary border-2 scale-105 bg-primary text-white' : 'border-outline opacity-50'}`}>
+                                            <span className="font-mono-data text-label-md">C-0{i+1}</span>
+                                            <span className="material-symbols-outlined">{i === 2 ? 'lock_open' : 'lock'}</span>
+                                        </div>
+                                    ))}
+                                    <div className="h-24 rounded flex flex-col items-center justify-center border-2 animate-pulse-red shadow-lg scale-105 bg-primary text-white col-span-2">
+                                        <span className="font-mono-data text-label-md font-bold">ID SLOT 01</span>
+                                        <span className="material-symbols-outlined">badge</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="lg:col-span-5 space-y-lg">
+                                <div className="bg-surface-container p-lg rounded-xl">
+                                    <h3 className="font-headline-md mb-md">Steps to Complete</h3>
+                                    <ul className="space-y-4">
+                                        <li className="flex gap-4">
+                                            <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">1</div>
+                                            <p className="text-on-surface">Locate Compartment <strong className="text-primary font-mono-data">C-03</strong>.</p>
+                                        </li>
+                                        <li className="flex gap-4">
+                                            <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">2</div>
+                                            <p className="text-on-surface"><strong>Deposit your Student ID</strong> into ID Slot 01.</p>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <button onClick={() => navigate('/')} className="w-full py-lg bg-primary hover:bg-primary-container text-white font-bold rounded-xl transition-all shadow-lg">Finish Transaction</button>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const ScreenReturnConfirm = () => {
+            const navigate = useNavigate();
+            return (
+                <div className="industrial-grid min-h-screen flex flex-col">
+                    <TopBar />
+                    <main className="flex-grow pt-[80px] px-lg pb-lg flex flex-col items-center justify-center">
+                        <div className="w-full max-w-6xl grid grid-cols-12 gap-gutter">
+                            <div className="col-span-12 mb-md">
+                                <h1 className="font-headline-lg text-on-surface">Confirm Equipment Return</h1>
+                                <p className="font-body-md text-secondary">Verify the record before opening the storage compartment.</p>
+                            </div>
+                            <div className="col-span-12 lg:col-span-7 flex flex-col gap-gutter">
+                                <div className="bg-surface-container-lowest border p-lg flex items-center gap-lg">
+                                    <div className="w-24 h-24 bg-surface-container border-2 border-primary-fixed overflow-hidden flex-shrink-0">
+                                        <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFUz-d2JCnGB5dUz_gbEthmXi9u8DeefrEhHcg4UbAE6j2DN63VWnJDWDFOwo4j9u1aErjbRWJ9Rx4N5FYTLMoBTdOx-wXl14eJFM-Fi_nKh442THwPOPL5v6LHi7OSwwenWJJ_ahrvFT5AuibKVLUA-Fxz60Q58S9eeKASzZDoDJyShCahjGXhi402H_odLarVsBf2aR48tjU-fIJFtZObBy0C_PCWqiGJQreD0K0JSU4p4xWLHKSyxFoV_FU5ZcOspJOoM40dpqG" />
+                                    </div>
+                                    <div className="flex-grow">
+                                        <h2 className="font-headline-md">Juan R. Dela Cruz</h2>
+                                        <span className="font-mono-data text-secondary">ID: 2021-00452-MN-0</span>
+                                    </div>
+                                </div>
+                                <div className="bg-on-secondary-fixed text-on-primary p-lg flex justify-between items-center">
+                                    <div>
+                                        <span className="font-label-md text-secondary-fixed-dim uppercase">Time Remaining</span>
+                                        <div className="font-display-lg text-display-lg font-mono-data">00:14:52</div>
+                                    </div>
+                                    <div className="flex items-center gap-xs text-secondary-fixed">
+                                        <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
+                                        <span className="font-title-lg">On Schedule</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-span-12 lg:col-span-5 flex flex-col gap-gutter">
+                                <button onClick={() => navigate('/return-action')} className="group relative bg-primary text-on-primary h-24 flex items-center justify-center gap-md rounded shadow-xl hover:bg-surface-tint transition-all">
+                                    <span className="material-symbols-outlined text-4xl">meeting_room</span>
+                                    <div className="text-left">
+                                        <span className="font-headline-md block">OPEN COMPARTMENT</span>
+                                        <span className="font-label-md uppercase opacity-80">C-03 will unlock immediately</span>
+                                    </div>
+                                </button>
+                                <button onClick={() => navigate('/commands')} className="bg-surface-container-high text-secondary h-14 flex items-center justify-center gap-sm">
+                                    <span className="material-symbols-outlined">cancel</span>
+                                    <span>Cancel Return</span>
+                                </button>
+                            </div>
+                        </div>
+                    </main>
+                    <Footer />
+                </div>
+            );
+        };
+
+        const ScreenReturnAction = () => {
+            const navigate = useNavigate();
+            return (
+                <div className="bg-background min-h-screen flex flex-col">
+                    <TopBar />
+                    <main className="flex-grow pt-24 pb-lg px-xl flex gap-lg container-max mx-auto w-full">
+                        <section className="w-1/2">
+                            <div className="bg-white p-lg rounded-xl h-full flex flex-col">
+                                <h2 className="font-title-lg mb-lg">Locker Status</h2>
+                                <div className="grid grid-cols-4 gap-2 flex-grow">
+                                    <div className="col-span-4 h-16 border rounded flex items-center justify-between px-md unlocked-highlight">
+                                        <span className="font-mono-data font-bold">ID-01</span>
+                                        <span className="text-primary font-bold">UNLOCKED</span>
+                                        <span className="material-symbols-outlined text-primary">lock_open</span>
+                                    </div>
+                                    {[...Array(8)].map((_, i) => (
+                                        <div key={i} className={`h-24 border rounded flex flex-col items-center justify-center ${i === 2 ? 'unlocked-highlight' : 'opacity-20'}`}>
+                                            <span className="font-mono-data">C-0{i+1}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+                        <section className="w-1/2 flex flex-col gap-lg">
+                            <h1 className="font-headline-lg">Return Tool & <br/><span className="text-primary">Retrieve ID</span></h1>
+                            <div className="flex flex-col gap-md">
+                                <div className="p-md bg-white border rounded-xl flex gap-md">
+                                    <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">1</div>
+                                    <p>Place tool in compartment C-03</p>
+                                </div>
+                                <div className="p-md bg-white border rounded-xl flex gap-md">
+                                    <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">2</div>
+                                    <p>Retrieve your Student ID from ID-01</p>
+                                </div>
+                            </div>
+                            <button onClick={() => navigate('/')} className="w-full bg-primary text-white py-lg rounded-xl font-bold text-headline-md shadow-lg mt-auto">Finish Return</button>
+                        </section>
+                    </main>
+                    <Footer />
+                </div>
+            );
+        };
+
+        const ScreenAdmin = () => {
+            const navigate = useNavigate();
+            return (
+                <div className="bg-background min-h-screen">
+                    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-lg py-md bg-surface border-b border-outline-variant">
+                        <div className="flex items-center gap-md">
+                            <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xs">TUP</div>
+                            <span className="font-headline-md text-headline-md font-bold text-primary">Admin Dashboard</span>
+                        </div>
+                        <button onClick={() => navigate('/')} className="px-md py-sm bg-secondary text-white rounded">Exit Admin</button>
+                    </header>
+                    <main className="pt-24 p-lg grid-dots min-h-screen">
+                        <div className="max-w-[1440px] mx-auto space-y-lg">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
+                                <div className="bg-white border p-lg rounded-xl shadow-sm">
+                                    <p className="text-secondary uppercase text-xs">Total Tools Out</p>
+                                    <h3 className="text-4xl font-bold mt-2">14</h3>
+                                </div>
+                                <div className="bg-white border p-lg rounded-xl shadow-sm">
+                                    <p className="text-secondary uppercase text-xs">Overdue Today</p>
+                                    <h3 className="text-4xl font-bold mt-2 text-primary">03</h3>
+                                </div>
+                                <div className="bg-white border p-lg rounded-xl shadow-sm">
+                                    <p className="text-secondary uppercase text-xs">System Health</p>
+                                    <h3 className="text-4xl font-bold mt-2 text-emerald-600">98.4%</h3>
+                                </div>
+                            </div>
+                            <section className="bg-white border rounded-xl overflow-hidden shadow-sm">
+                                <div className="px-lg py-md border-b bg-slate-800 text-white flex justify-between">
+                                    <h4 className="font-bold uppercase tracking-wide">Active Tool Transactions</h4>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-100 uppercase text-xs text-slate-600">
+                                            <tr>
+                                                <th className="p-4">Student ID</th>
+                                                <th className="p-4">Tool</th>
+                                                <th className="p-4">Status</th>
+                                                <th className="p-4">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y text-sm">
+                                            <tr>
+                                                <td className="p-4 font-bold">TUPM-21-0955</td>
+                                                <td className="p-4">Digital Multimeter</td>
+                                                <td className="p-4 text-emerald-600">Active (1h left)</td>
+                                                <td className="p-4"><button className="text-primary font-bold">Manage</button></td>
+                                            </tr>
+                                            <tr>
+                                                <td className="p-4 font-bold text-primary">TUPM-21-0842</td>
+                                                <td className="p-4">Oscilloscope</td>
+                                                <td className="p-4 text-primary">Overdue (-45m)</td>
+                                                <td className="p-4"><button className="text-primary font-bold">Notify</button></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                        </div>
+                    </main>
+                    <Footer />
+                </div>
+            );
+        };
+
+        // --- App Shell ---
+
+        const App = () => {
+            return (
+                <MemoryRouter>
+                    <Routes>
+                        <Route path="/" element={<ScreenWelcome />} />
+                        <Route path="/commands" element={<ScreenCommands />} />
+                        <Route path="/deposit" element={<ScreenDeposit />} />
+                        <Route path="/tool-selection" element={<ScreenToolSelection />} />
+                        <Route path="/tool-release" element={<ScreenToolRelease />} />
+                        <Route path="/return-confirm" element={<ScreenReturnConfirm />} />
+                        <Route path="/return-action" element={<ScreenReturnAction />} />
+                        <Route path="/admin" element={<ScreenAdmin />} />
+                    </Routes>
+                </MemoryRouter>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
