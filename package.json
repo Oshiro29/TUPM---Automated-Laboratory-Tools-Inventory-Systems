@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"vite\" \"npm run backend\"",
     "build": "vite build",
     "preview": "vite preview",
     "backend": "cd backend && npm start",
@@ -16,6 +16,9 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.37.5",
     "vite": "^4.3.9"
   }
 }

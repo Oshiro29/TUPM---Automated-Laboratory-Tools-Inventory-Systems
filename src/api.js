@@ -26,6 +26,9 @@ export const api = {
   login(studentId, pin) {
     return request('/auth/login', { method: 'POST', body: { studentId, pin } });
   },
+  loginAdmin(accessCode) {
+    return request('/admin/login', { method: 'POST', body: { accessCode } });
+  },
   scan(qrData) {
     return request('/scan', { method: 'POST', body: { qrData } });
   },
