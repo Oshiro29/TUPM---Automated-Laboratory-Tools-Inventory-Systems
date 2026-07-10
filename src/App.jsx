@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { api } from './api';
 
 const SessionContext = createContext(null);
@@ -510,7 +510,7 @@ const ScreenToolRelease = () => {
     setError('');
 
     try {
-      const borrowResult = await api.borrow(selectedTool.id, selectedTool.slot, token);
+      await api.borrow(selectedTool.id, selectedTool.slot, token);
       await api.openCompartment(selectedTool.slot, token);
       setMessage(`Borrow confirmed. ${selectedTool.name} assigned to ${selectedTool.slot}.`);
       navigate('/commands');
@@ -550,7 +550,7 @@ const ScreenToolRelease = () => {
                 <div className="grid grid-cols-2 gap-4 text-sm text-secondary">
                   <div>
                     <span className="block font-bold text-on-surface">Student</span>
-                    <span>{selectedTool.name ? 'Verified user' : 'Student'}</span>
+                    <span>Verified user</span>
                   </div>
                   <div>
                     <span className="block font-bold text-on-surface">Compartment</span>
@@ -762,32 +762,118 @@ const ScreenReturnAction = () => {
 
 const ScreenAdmin = () => {
   const navigate = useNavigate();
-  const { token, logout, setError } = useSession();
+  const { logout } = useSession();
+  const [token, setToken] = useState(() => sessionStorage.getItem('adminSessionToken') || '');
+  const [accessCode, setAccessCode] = useState('');
   const [summary, setSummary] = useState(null);
+  const [tools, setTools] = useState([]);
+  const [search, setSearch] = useState('');
+  const [showOverdueOnly, setShowOverdueOnly] = useState(false);
+  const [lastSynced, setLastSynced] = useState(new Date());
+  const [error, setError] = useState('');
 
-  useAuthGuard();
+  const loadDashboard = async () => {
+    if (!token) return;
+    setError('');
+    try {
+      const [summaryResult, toolsResult] = await Promise.all([api.getAdminSummary(token), api.getTools(token)]);
+      setSummary(summaryResult);
+      setTools(toolsResult.tools || []);
+      setLastSynced(new Date());
+    } catch (err) {
+      sessionStorage.removeItem('adminSessionToken');
+      setToken('');
+      setError(err.message);
+    }
+  };
 
   useEffect(() => {
-    api
-      .getAdminSummary(token)
-      .then((result) => setSummary(result))
-      .catch((err) => setError(err.message));
-  }, [token, setError]);
+    if (!token) {
+      setSummary(null);
+      setTools([]);
+      return;
+    }
+    loadDashboard();
+  }, [token]);
+
+  const handleAdminLogin = async (event) => {
+    event.preventDefault();
+    setError('');
+    try {
+      const result = await api.loginAdmin(accessCode.trim());
+      sessionStorage.setItem('adminSessionToken', result.token);
+      setToken(result.token);
+      setAccessCode('');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleAdminLogout = () => {
+    sessionStorage.removeItem('adminSessionToken');
+    setToken('');
+    logout();
+    navigate('/');
+  };
+
+  const isOverdue = (transaction) => new Date(transaction.dueAt).getTime() < Date.now();
+  const transactions = summary?.activeTransactions || [];
+  const overdueTransactions = transactions.filter(isOverdue);
+  const filteredTransactions = transactions.filter((transaction) => {
+    const value = `${transaction.studentId} ${transaction.toolName} ${transaction.compartmentId}`.toLowerCase();
+    return value.includes(search.toLowerCase()) && (!showOverdueOnly || isOverdue(transaction));
+  });
+  const compartments = tools.map((tool) => ({ ...tool, occupied: transactions.some((transaction) => transaction.compartmentId === tool.slot) }));
+
+  if (!token) {
+    return (
+      <div className="bg-background min-h-screen flex items-center justify-center p-lg">
+        <form onSubmit={handleAdminLogin} className="w-full max-w-md bg-white border rounded-xl p-xl shadow-sm space-y-lg">
+          <div>
+            <h1 className="font-headline-lg text-primary">Admin Dashboard</h1>
+            <p className="text-secondary mt-sm">Enter the administrator access code to view inventory activity.</p>
+          </div>
+          <input
+            className="w-full border border-outline-variant rounded px-md py-sm"
+            type="password"
+            placeholder="Admin access code"
+            value={accessCode}
+            onChange={(event) => setAccessCode(event.target.value)}
+            autoFocus
+          />
+          {error && <p className="text-error font-bold">{error}</p>}
+          <div className="flex gap-md">
+            <button type="button" onClick={() => navigate('/')} className="flex-1 border rounded px-md py-sm">Back</button>
+            <button type="submit" className="flex-1 bg-primary text-white rounded px-md py-sm">Sign In</button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-background min-h-screen">
+    <div className="bg-background min-h-screen pb-12">
       <header className="fixed top-0 w-full z-50 flex justify-between items-center px-lg py-md bg-surface border-b border-outline-variant">
         <div className="flex items-center gap-md">
           <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xs">TUP</div>
-          <span className="font-headline-md text-headline-md font-bold text-primary">Admin Dashboard</span>
+          <span className="font-headline-md text-headline-md font-bold text-primary">TUP-Manila Inventory</span>
         </div>
         <div className="flex items-center gap-md">
-          <button onClick={logout} className="px-md py-sm bg-secondary text-white rounded">Sign Out</button>
-          <button onClick={() => navigate('/commands')} className="px-md py-sm bg-surface-container text-secondary rounded">Back</button>
+          <label className="hidden md:flex items-center gap-sm bg-surface-container rounded px-sm py-xs border border-outline-variant w-80">
+            <span className="material-symbols-outlined text-secondary">search</span>
+            <input className="bg-transparent border-none focus:ring-0 text-body-md w-full p-0" placeholder="Search tools or students..." value={search} onChange={(event) => setSearch(event.target.value)} />
+          </label>
+          <span className="hidden sm:block font-label-md">ADMIN_SYS</span>
+          <button onClick={handleAdminLogout} title="Sign out" className="p-sm hover:bg-surface-container rounded-full text-secondary"><span className="material-symbols-outlined">logout</span></button>
         </div>
       </header>
       <main className="pt-24 p-lg grid-dots min-h-screen">
         <div className="max-w-[1440px] mx-auto space-y-lg">
+          <div className="flex items-center justify-between gap-md">
+            <div className="flex items-center gap-sm text-[12px] font-label-md bg-white/80 px-md py-1 rounded-full border border-outline-variant shadow-sm"><span className="text-secondary">Admin</span><span className="material-symbols-outlined text-[12px]">chevron_right</span><span className="text-primary font-bold">Real-time Dashboard</span></div>
+            <button onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify(transactions, null, 2)], { type: 'application/json' })); const link = document.createElement('a'); link.href = url; link.download = 'tupm-inventory-report.json'; link.click(); URL.revokeObjectURL(url); }} className="px-md py-sm bg-primary text-white rounded font-bold flex items-center gap-sm text-sm"><span className="material-symbols-outlined text-[18px]">file_download</span>Export Reports</button>
+          </div>
+          {error && <p className="text-error font-bold">{error}</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
             <div className="bg-white border p-lg rounded-xl shadow-sm">
               <p className="text-secondary uppercase text-xs">Total Tools Out</p>
@@ -802,10 +888,17 @@ const ScreenAdmin = () => {
               <h3 className="text-4xl font-bold mt-2 text-emerald-600">98.4%</h3>
             </div>
           </div>
+          <section className="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+            <div className="lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+              <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined text-primary">grid_view</span>Storage Compartments Overview</h4><div className="hidden sm:flex gap-md font-label-md"><span><i className="inline-block w-3 h-3 bg-emerald-500 rounded-full mr-xs" />Available</span><span><i className="inline-block w-3 h-3 bg-slate-400 rounded-full mr-xs" />Occupied</span></div></div>
+              <div className="p-lg grid grid-cols-2 sm:grid-cols-4 gap-md">{compartments.map((tool) => <div key={tool.id} className={`border p-md rounded-lg ${tool.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'}`}><div className="flex justify-between mb-sm"><span className={`font-mono-data font-bold ${tool.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{tool.slot}</span><span className={`material-symbols-outlined text-[18px] ${tool.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{tool.occupied ? 'lock' : 'check_circle'}</span></div><p className="font-label-md truncate">{tool.name}</p></div>)}</div>
+            </div>
+            <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm"><div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-primary text-white"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined">warning</span>Overdue Alerts</h4><span className="px-sm py-xs bg-white/20 rounded font-label-md">{overdueTransactions.length} Alerts</span></div><div className="p-md space-y-sm">{overdueTransactions.length ? overdueTransactions.map((item) => <div key={item.id} className="p-md bg-error-container/20 border-l-4 border-primary rounded-r-lg"><div className="flex justify-between"><span className="font-body-md font-bold text-primary">{item.studentId}</span><span className="font-label-md text-primary font-bold">OVERDUE</span></div><p className="text-body-md text-secondary">{item.toolName}</p><p className="mt-sm text-[11px] text-secondary">Due: {new Date(item.dueAt).toLocaleString()}</p></div>) : <p className="p-md text-secondary text-body-md">No overdue tools. Great work!</p>}</div></div>
+          </section>
           <section className="bg-white border rounded-xl overflow-hidden shadow-sm">
             <div className="px-lg py-md border-b bg-slate-800 text-white flex justify-between">
               <h4 className="font-bold uppercase tracking-wide">Active Tool Transactions</h4>
-              <button onClick={() => window.location.reload()} className="font-label-md uppercase text-secondary/80">Refresh</button>
+              <div className="flex gap-sm"><button onClick={() => setShowOverdueOnly((value) => !value)} className={`font-label-md uppercase ${showOverdueOnly ? 'text-white' : 'text-secondary/80'}`}>Filter</button><button onClick={loadDashboard} className="font-label-md uppercase text-secondary/80">Refresh</button></div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -818,19 +911,11 @@ const ScreenAdmin = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y text-sm">
-                  {(summary?.activeTransactions || []).map((item) => (
+                  {filteredTransactions.map((item) => (
                     <tr key={`active-${item.id}`}>
                       <td className="p-4 font-bold">{item.studentId}</td>
                       <td className="p-4">{item.toolName}</td>
-                      <td className="p-4 text-emerald-600">Active</td>
-                      <td className="p-4">{new Date(item.dueAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                  {(summary?.overdueTransactions || []).map((item) => (
-                    <tr key={`overdue-${item.id}`}>
-                      <td className="p-4 font-bold text-primary">{item.studentId}</td>
-                      <td className="p-4">{item.toolName}</td>
-                      <td className="p-4 text-primary">Overdue</td>
+                      <td className={`p-4 ${isOverdue(item) ? 'text-primary' : 'text-emerald-600'}`}>{isOverdue(item) ? 'Overdue' : 'Active'}</td>
                       <td className="p-4">{new Date(item.dueAt).toLocaleString()}</td>
                     </tr>
                   ))}
@@ -840,7 +925,7 @@ const ScreenAdmin = () => {
           </section>
         </div>
       </main>
-      <Footer />
+      <footer className="fixed bottom-0 right-0 left-0 bg-surface border-t border-outline-variant px-lg py-xs flex justify-between items-center z-30 text-[11px] font-mono-data text-secondary"><span><i className="inline-block w-2 h-2 bg-emerald-500 rounded-full mr-xs animate-pulse" />SERVER: CLUSTER-01A (ONLINE)</span><span>Last Synced: {lastSynced.toLocaleTimeString()}</span></footer>
     </div>
   );
 };

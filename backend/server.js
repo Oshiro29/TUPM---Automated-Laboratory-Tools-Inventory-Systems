@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const adminToken = 'ADMIN-TUPM-ACCESS';
+const adminToken = process.env.ADMIN_ACCESS_TOKEN || 'ADMIN-TUPM-ACCESS';
 const sessionTokens = new Map();
 const borrowDurationMs = 3 * 60 * 60 * 1000;
 
@@ -21,11 +21,14 @@ function buildStudentPayload(student) {
 
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
-  if (!auth) {
+  if (!auth || !auth.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'Authorization required.' });
   }
 
-  const token = auth.replace('Bearer ', '').trim();
+  const token = auth.slice('Bearer '.length).trim();
+  if (!token) {
+    return res.status(401).json({ message: 'Authorization required.' });
+  }
   if (token === adminToken) {
     req.admin = true;
     return next();
@@ -120,6 +123,15 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, student: buildStudentPayload(student) });
 });
 
+app.post('/api/admin/login', (req, res) => {
+  const { accessCode } = req.body;
+  if (!accessCode || accessCode !== adminToken) {
+    return res.status(401).json({ message: 'Invalid admin access code.' });
+  }
+
+  res.json({ token: adminToken });
+});
+
 app.post('/api/scan', (req, res) => {
   const { qrData } = req.body;
   if (!qrData) {
@@ -208,6 +220,12 @@ app.post('/api/return', authMiddleware, (req, res) => {
     return res.status(404).json({ message: 'Active transaction not found.' });
   }
 
+  if (!req.admin && transaction.studentId !== req.student.id) {
+    return res.status(403).json({ message: 'You can only return your own active transaction.' });
+  }
+
+  const wasOverdue = checkOverdue(transaction);
+
   transaction.returnedAt = Date.now();
   transaction.returnCompartmentId = compartmentId;
 
@@ -216,7 +234,7 @@ app.post('/api/return', authMiddleware, (req, res) => {
     tool.availableQty += 1;
   }
 
-  if (checkOverdue(transaction)) {
+  if (wasOverdue) {
     sendAlert(`Return overdue: ${transaction.studentId} ${transaction.toolName}`);
   }
 
@@ -244,6 +262,8 @@ app.get('/api/alerts', authMiddleware, (req, res) => {
   res.json({ alerts });
 });
 
-app.listen(5000, () => {
-  console.log('Backend running on port 5000');
+const port = Number(process.env.PORT) || 5000;
+
+app.listen(port, () => {
+  console.log(`Backend running on port ${port}`);
 });
