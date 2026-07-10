@@ -1,67 +1,16 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const { students, tools, transactions, alerts } = require('./data');
-
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+const { initializeDatabase } = require('./db/database');
+const { seedDatabase } = require('./db/seed');
+const { createInventoryRepository } = require('./repositories/inventoryRepository');
 
 const adminToken = process.env.ADMIN_ACCESS_TOKEN || 'ADMIN-TUPM-ACCESS';
-const sessionTokens = new Map();
 const borrowDurationMs = 3 * 60 * 60 * 1000;
-
-function findStudent(studentId) {
-  return students.find((student) => student.id === studentId);
-}
+const sessionTokens = new Map();
 
 function buildStudentPayload(student) {
   return { id: student.id, name: student.name, email: student.email };
-}
-
-function authMiddleware(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Authorization required.' });
-  }
-
-  const token = auth.slice('Bearer '.length).trim();
-  if (!token) {
-    return res.status(401).json({ message: 'Authorization required.' });
-  }
-  if (token === adminToken) {
-    req.admin = true;
-    return next();
-  }
-
-  const studentId = sessionTokens.get(token);
-  if (!studentId) {
-    return res.status(401).json({ message: 'Invalid or expired token.' });
-  }
-
-  const student = findStudent(studentId);
-  if (!student) {
-    return res.status(401).json({ message: 'Student not found.' });
-  }
-
-  req.student = student;
-  req.token = token;
-  next();
-}
-
-function findTool(toolId) {
-  return tools.find((tool) => tool.id === toolId);
-}
-
-function findActiveTransaction(studentId) {
-  return transactions.find((tx) => tx.studentId === studentId && tx.returnedAt === null);
-}
-
-function checkOverdue(transaction) {
-  if (!transaction || transaction.returnedAt) {
-    return false;
-  }
-  return Date.now() > transaction.dueAt;
 }
 
 function createSessionToken(studentId) {
@@ -70,200 +19,122 @@ function createSessionToken(studentId) {
   return token;
 }
 
-function logTransaction(transaction) {
-  transactions.push(transaction);
+async function createApp() {
+  const db = await initializeDatabase();
+  await seedDatabase();
+  const repository = createInventoryRepository(db);
+  const app = express();
+  app.use(cors());
+  app.use(bodyParser.json());
+
+  async function authMiddleware(req, res, next) {
+    try {
+      const auth = req.headers.authorization;
+      if (!auth || !auth.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'Authorization required.' });
+      }
+      const token = auth.slice('Bearer '.length).trim();
+      if (!token) return res.status(401).json({ message: 'Authorization required.' });
+      if (token === adminToken) {
+        req.admin = true;
+        return next();
+      }
+      const studentId = sessionTokens.get(token);
+      if (!studentId) return res.status(401).json({ message: 'Invalid or expired token.' });
+      const student = await repository.findStudentById(studentId);
+      if (!student) return res.status(401).json({ message: 'Student not found.' });
+      req.student = student;
+      req.token = token;
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  app.get('/', (req, res) => res.send('Backend is running!'));
+
+  app.post('/api/auth/login', async (req, res) => {
+    const { studentId, pin } = req.body;
+    if (!studentId || !pin) return res.status(400).json({ message: 'Student ID and PIN are required.' });
+    const student = await repository.findStudentById(studentId);
+    if (!student || student.pin !== pin) return res.status(401).json({ message: 'Invalid credentials.' });
+    return res.json({ token: createSessionToken(student.id), student: buildStudentPayload(student) });
+  });
+
+  app.post('/api/admin/login', (req, res) => {
+    const { accessCode } = req.body;
+    if (!accessCode || accessCode !== adminToken) return res.status(401).json({ message: 'Invalid admin access code.' });
+    return res.json({ token: adminToken });
+  });
+
+  app.post('/api/scan', async (req, res) => {
+    const { qrData } = req.body;
+    if (!qrData) return res.status(400).json({ message: 'QR data is required.' });
+    const student = await repository.findStudentById(qrData.trim());
+    if (!student) return res.status(404).json({ message: 'Student not found by QR code.' });
+    return res.json({ token: createSessionToken(student.id), student: buildStudentPayload(student) });
+  });
+
+  app.get('/api/student/me', authMiddleware, (req, res) => res.json({ student: buildStudentPayload(req.student) }));
+  app.get('/api/tools', authMiddleware, async (req, res) => res.json({ tools: await repository.listTools() }));
+
+  app.post('/api/borrow', authMiddleware, async (req, res) => {
+    const { toolId, compartmentId } = req.body;
+    if (!toolId || !compartmentId) return res.status(400).json({ message: 'Tool ID and compartment ID are required.' });
+    const result = await repository.borrowTool({ student: req.student, toolId, compartmentId, dueAt: Date.now() + borrowDurationMs });
+    if (result.reason === 'TOOL_NOT_FOUND') return res.status(404).json({ message: 'Tool not found.' });
+    if (result.reason === 'TOOL_UNAVAILABLE') return res.status(400).json({ message: 'Tool is not available.' });
+    if (result.reason === 'ACTIVE_TRANSACTION') return res.status(400).json({ message: 'Please return the current tool before borrowing another.' });
+    return res.json({ transaction: result.transaction });
+  });
+
+  app.post('/api/open', authMiddleware, (req, res) => {
+    const { compartmentId } = req.body;
+    if (!compartmentId) return res.status(400).json({ message: 'Compartment ID is required.' });
+    const openCommand = { compartmentId, action: 'open', timestamp: new Date().toISOString() };
+    console.log('Hardware open request:', openCommand);
+    return res.json({ message: 'Compartment open command sent.', openCommand });
+  });
+
+  app.post('/api/return', authMiddleware, async (req, res) => {
+    const { transactionId, compartmentId } = req.body;
+    if (!transactionId || !compartmentId) return res.status(400).json({ message: 'Transaction ID and compartment ID are required.' });
+    const result = await repository.returnTool({ transactionId, compartmentId, studentId: req.student && req.student.id, isAdmin: Boolean(req.admin), returnedAt: Date.now() });
+    if (result.reason === 'NOT_FOUND') return res.status(404).json({ message: 'Active transaction not found.' });
+    if (result.reason === 'FORBIDDEN') return res.status(403).json({ message: 'You can only return your own active transaction.' });
+    if (result.alert) console.log('ALERT:', result.alert.message);
+    return res.json({ transaction: result.transaction });
+  });
+
+  app.get('/api/transactions/active', authMiddleware, async (req, res) => {
+    return res.json({ transactions: await repository.listActiveTransactionsForStudent(req.student.id) });
+  });
+
+  app.get('/api/admin/summary', authMiddleware, async (req, res) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    return res.json(await repository.getAdminSummary(Date.now()));
+  });
+
+  app.get('/api/alerts', authMiddleware, async (req, res) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    return res.json({ alerts: await repository.listAlerts() });
+  });
+
+  app.use((error, req, res, next) => { // eslint-disable-line no-unused-vars
+    console.error('Request failed:', error);
+    res.status(500).json({ message: 'Internal server error.' });
+  });
+  return app;
 }
 
-function buildSummary() {
-  const activeTransactions = transactions.filter((tx) => tx.returnedAt === null);
-  const overdueTransactions = activeTransactions.filter((tx) => checkOverdue(tx));
-
-  return {
-    activeCount: activeTransactions.length,
-    overdueCount: overdueTransactions.length,
-    activeTransactions: activeTransactions.map((tx) => ({
-      id: tx.id,
-      studentId: tx.studentId,
-      toolName: tx.toolName,
-      dueAt: tx.dueAt,
-      compartmentId: tx.compartmentId,
-    })),
-    overdueTransactions: overdueTransactions.map((tx) => ({
-      id: tx.id,
-      studentId: tx.studentId,
-      toolName: tx.toolName,
-      dueAt: tx.dueAt,
-      compartmentId: tx.compartmentId,
-    })),
-  };
+async function start() {
+  const app = await createApp();
+  const port = Number(process.env.PORT) || 5000;
+  app.listen(port, () => console.log(`Backend running on port ${port}`));
 }
 
-function sendAlert(message) {
-  const alert = { id: `alert-${Date.now()}`, message, createdAt: new Date().toISOString() };
-  alerts.push(alert);
-  console.log('ALERT:', message);
+if (require.main === module) {
+  start().catch((error) => { console.error('Backend startup failed:', error); process.exitCode = 1; });
 }
 
-app.get('/', (req, res) => {
-  res.send('Backend is running!');
-});
-
-app.post('/api/auth/login', (req, res) => {
-  const { studentId, pin } = req.body;
-  if (!studentId || !pin) {
-    return res.status(400).json({ message: 'Student ID and PIN are required.' });
-  }
-
-  const student = findStudent(studentId);
-  if (!student || student.pin !== pin) {
-    return res.status(401).json({ message: 'Invalid credentials.' });
-  }
-
-  const token = createSessionToken(student.id);
-  res.json({ token, student: buildStudentPayload(student) });
-});
-
-app.post('/api/admin/login', (req, res) => {
-  const { accessCode } = req.body;
-  if (!accessCode || accessCode !== adminToken) {
-    return res.status(401).json({ message: 'Invalid admin access code.' });
-  }
-
-  res.json({ token: adminToken });
-});
-
-app.post('/api/scan', (req, res) => {
-  const { qrData } = req.body;
-  if (!qrData) {
-    return res.status(400).json({ message: 'QR data is required.' });
-  }
-
-  const student = findStudent(qrData.trim());
-  if (!student) {
-    return res.status(404).json({ message: 'Student not found by QR code.' });
-  }
-
-  const token = createSessionToken(student.id);
-  res.json({ token, student: buildStudentPayload(student) });
-});
-
-app.get('/api/student/me', authMiddleware, (req, res) => {
-  res.json({ student: buildStudentPayload(req.student) });
-});
-
-app.get('/api/tools', authMiddleware, (req, res) => {
-  res.json({ tools });
-});
-
-app.post('/api/borrow', authMiddleware, (req, res) => {
-  const { toolId, compartmentId } = req.body;
-  if (!toolId || !compartmentId) {
-    return res.status(400).json({ message: 'Tool ID and compartment ID are required.' });
-  }
-
-  const tool = findTool(toolId);
-  if (!tool) {
-    return res.status(404).json({ message: 'Tool not found.' });
-  }
-
-  if (tool.availableQty <= 0) {
-    return res.status(400).json({ message: 'Tool is not available.' });
-  }
-
-  const existing = findActiveTransaction(req.student.id);
-  if (existing) {
-    return res.status(400).json({ message: 'Please return the current tool before borrowing another.' });
-  }
-
-  tool.availableQty -= 1;
-  const dueAt = Date.now() + borrowDurationMs;
-  const transaction = {
-    id: `tx-${Date.now()}`,
-    studentId: req.student.id,
-    studentName: req.student.name,
-    toolId: tool.id,
-    toolName: tool.name,
-    compartmentId,
-    borrowedAt: Date.now(),
-    dueAt,
-    returnedAt: null,
-  };
-
-  logTransaction(transaction);
-  res.json({ transaction });
-});
-
-app.post('/api/open', authMiddleware, (req, res) => {
-  const { compartmentId } = req.body;
-  if (!compartmentId) {
-    return res.status(400).json({ message: 'Compartment ID is required.' });
-  }
-
-  const openCommand = {
-    compartmentId,
-    action: 'open',
-    timestamp: new Date().toISOString(),
-  };
-
-  console.log('Hardware open request:', openCommand);
-  res.json({ message: 'Compartment open command sent.', openCommand });
-});
-
-app.post('/api/return', authMiddleware, (req, res) => {
-  const { transactionId, compartmentId } = req.body;
-  if (!transactionId || !compartmentId) {
-    return res.status(400).json({ message: 'Transaction ID and compartment ID are required.' });
-  }
-
-  const transaction = transactions.find((tx) => tx.id === transactionId && tx.returnedAt === null);
-  if (!transaction) {
-    return res.status(404).json({ message: 'Active transaction not found.' });
-  }
-
-  if (!req.admin && transaction.studentId !== req.student.id) {
-    return res.status(403).json({ message: 'You can only return your own active transaction.' });
-  }
-
-  const wasOverdue = checkOverdue(transaction);
-
-  transaction.returnedAt = Date.now();
-  transaction.returnCompartmentId = compartmentId;
-
-  const tool = findTool(transaction.toolId);
-  if (tool) {
-    tool.availableQty += 1;
-  }
-
-  if (wasOverdue) {
-    sendAlert(`Return overdue: ${transaction.studentId} ${transaction.toolName}`);
-  }
-
-  res.json({ transaction });
-});
-
-app.get('/api/transactions/active', authMiddleware, (req, res) => {
-  const active = transactions.filter((tx) => tx.studentId === req.student.id && tx.returnedAt === null);
-  res.json({ transactions: active });
-});
-
-app.get('/api/admin/summary', authMiddleware, (req, res) => {
-  if (!req.admin) {
-    return res.status(403).json({ message: 'Admin access required.' });
-  }
-
-  res.json(buildSummary());
-});
-
-app.get('/api/alerts', authMiddleware, (req, res) => {
-  if (!req.admin) {
-    return res.status(403).json({ message: 'Admin access required.' });
-  }
-
-  res.json({ alerts });
-});
-
-const port = Number(process.env.PORT) || 5000;
-
-app.listen(port, () => {
-  console.log(`Backend running on port ${port}`);
-});
+module.exports = { createApp, start };
