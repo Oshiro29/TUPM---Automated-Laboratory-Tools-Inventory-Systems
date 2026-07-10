@@ -31,7 +31,17 @@ function mapTransaction(row) {
 }
 
 function mapAlert(row) {
-  return row && { id: row.id, message: row.message, createdAt: row.created_at };
+  return row && {
+    id: row.id,
+    message: row.message,
+    createdAt: row.created_at,
+    transactionId: row.transaction_id,
+    type: row.alert_type,
+    resolvedAt: row.resolved_at,
+    ...(row.student_id ? { studentId: row.student_id } : {}),
+    ...(row.tool_name ? { toolName: row.tool_name } : {}),
+    ...(row.due_at ? { dueAt: row.due_at } : {}),
+  };
 }
 
 function createInventoryRepository(db) {
@@ -47,6 +57,23 @@ function createInventoryRepository(db) {
     FROM transactions tx
     JOIN students ON students.id = tx.student_id
     JOIN tools ON tools.id = tx.tool_id`;
+
+  async function syncOverdueAlerts(now) {
+    return serializeWrite(async () => {
+      const overdueRows = await db.all(`${transactionSelect}
+        WHERE tx.returned_at IS NULL AND tx.due_at < ?`, [now]);
+
+      for (const row of overdueRows) {
+        const id = `alert-${randomUUID()}`;
+        const createdAt = new Date(now).toISOString();
+        const message = `Overdue tool: ${row.tool_name} borrowed by ${row.student_id}`;
+        await db.run(`INSERT OR IGNORE INTO alerts
+          (id, message, created_at, transaction_id, alert_type, resolved_at)
+          VALUES (?, ?, ?, ?, 'OVERDUE', NULL)`,
+        [id, message, createdAt, row.id]);
+      }
+    });
+  }
 
   return {
     async findStudentById(studentId) {
@@ -120,6 +147,9 @@ function createInventoryRepository(db) {
           const wasOverdue = returnedAt > row.due_at;
           await db.run('UPDATE transactions SET returned_at = ?, return_compartment_id = ? WHERE id = ?', [returnedAt, compartmentId, transactionId]);
           await db.run('UPDATE tools SET available_qty = available_qty + 1 WHERE id = ?', [row.tool_id]);
+          await db.run(`UPDATE alerts SET resolved_at = ?
+            WHERE transaction_id = ? AND alert_type = 'OVERDUE' AND resolved_at IS NULL`,
+          [new Date(returnedAt).toISOString(), transactionId]);
 
           let alert;
           if (wasOverdue) {
@@ -146,6 +176,7 @@ function createInventoryRepository(db) {
     },
 
     async getAdminSummary(now) {
+      await syncOverdueAlerts(now);
       const rows = await db.all(`${transactionSelect} WHERE tx.returned_at IS NULL ORDER BY tx.borrowed_at DESC`);
       const transactions = rows.map(mapTransaction);
       const overdueTransactions = transactions.filter((transaction) => now > transaction.dueAt);
@@ -164,8 +195,15 @@ function createInventoryRepository(db) {
       };
     },
 
-    async listAlerts() {
-      return (await db.all('SELECT id, message, created_at FROM alerts ORDER BY created_at DESC')).map(mapAlert);
+    async listAlerts(now = Date.now()) {
+      await syncOverdueAlerts(now);
+      const rows = await db.all(`SELECT alerts.*, tx.student_id, tx.due_at, tools.name AS tool_name
+        FROM alerts
+        JOIN transactions tx ON tx.id = alerts.transaction_id
+        JOIN tools ON tools.id = tx.tool_id
+        WHERE alerts.alert_type = 'OVERDUE' AND alerts.resolved_at IS NULL AND tx.returned_at IS NULL
+        ORDER BY alerts.created_at DESC`);
+      return rows.map(mapAlert);
     },
   };
 }

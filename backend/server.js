@@ -117,7 +117,7 @@ async function createApp() {
 
   app.get('/api/alerts', authMiddleware, async (req, res) => {
     if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
-    return res.json({ alerts: await repository.listAlerts() });
+    return res.json({ alerts: await repository.listAlerts(Date.now()) });
   });
 
   app.use((error, req, res, next) => { // eslint-disable-line no-unused-vars
