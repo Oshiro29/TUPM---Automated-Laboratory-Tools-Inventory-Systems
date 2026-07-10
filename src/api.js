@@ -47,6 +47,9 @@ export const api = {
   getAdminSummary(token) {
     return request('/admin/summary', { token });
   },
+  getAlerts(token) {
+    return request('/alerts', { token });
+  },
   openCompartment(compartmentId, token) {
     return request('/open', { method: 'POST', body: { compartmentId }, token });
   },

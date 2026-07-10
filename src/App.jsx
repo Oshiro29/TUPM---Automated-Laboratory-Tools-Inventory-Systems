@@ -767,6 +767,7 @@ const ScreenAdmin = () => {
   const [accessCode, setAccessCode] = useState('');
   const [summary, setSummary] = useState(null);
   const [tools, setTools] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [search, setSearch] = useState('');
   const [showOverdueOnly, setShowOverdueOnly] = useState(false);
   const [lastSynced, setLastSynced] = useState(new Date());
@@ -776,9 +777,10 @@ const ScreenAdmin = () => {
     if (!token) return;
     setError('');
     try {
-      const [summaryResult, toolsResult] = await Promise.all([api.getAdminSummary(token), api.getTools(token)]);
+      const [summaryResult, toolsResult, alertsResult] = await Promise.all([api.getAdminSummary(token), api.getTools(token), api.getAlerts(token)]);
       setSummary(summaryResult);
       setTools(toolsResult.tools || []);
+      setAlerts(alertsResult.alerts || []);
       setLastSynced(new Date());
     } catch (err) {
       sessionStorage.removeItem('adminSessionToken');
@@ -791,9 +793,16 @@ const ScreenAdmin = () => {
     if (!token) {
       setSummary(null);
       setTools([]);
+      setAlerts([]);
       return;
     }
     loadDashboard();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    const refreshInterval = window.setInterval(loadDashboard, 60 * 1000);
+    return () => window.clearInterval(refreshInterval);
   }, [token]);
 
   const handleAdminLogin = async (event) => {
@@ -818,7 +827,6 @@ const ScreenAdmin = () => {
 
   const isOverdue = (transaction) => new Date(transaction.dueAt).getTime() < Date.now();
   const transactions = summary?.activeTransactions || [];
-  const overdueTransactions = transactions.filter(isOverdue);
   const filteredTransactions = transactions.filter((transaction) => {
     const value = `${transaction.studentId} ${transaction.toolName} ${transaction.compartmentId}`.toLowerCase();
     return value.includes(search.toLowerCase()) && (!showOverdueOnly || isOverdue(transaction));
@@ -864,6 +872,10 @@ const ScreenAdmin = () => {
             <input className="bg-transparent border-none focus:ring-0 text-body-md w-full p-0" placeholder="Search tools or students..." value={search} onChange={(event) => setSearch(event.target.value)} />
           </label>
           <span className="hidden sm:block font-label-md">ADMIN_SYS</span>
+          <div className="relative" title={`${alerts.length} overdue tool notification${alerts.length === 1 ? '' : 's'}`}>
+            <span className={`material-symbols-outlined ${alerts.length ? 'text-primary' : 'text-secondary'}`}>notifications</span>
+            {alerts.length > 0 && <span className="absolute -right-2 -top-2 min-w-4 h-4 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center">{alerts.length}</span>}
+          </div>
           <button onClick={handleAdminLogout} title="Sign out" className="p-sm hover:bg-surface-container rounded-full text-secondary"><span className="material-symbols-outlined">logout</span></button>
         </div>
       </header>
@@ -893,7 +905,7 @@ const ScreenAdmin = () => {
               <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined text-primary">grid_view</span>Storage Compartments Overview</h4><div className="hidden sm:flex gap-md font-label-md"><span><i className="inline-block w-3 h-3 bg-emerald-500 rounded-full mr-xs" />Available</span><span><i className="inline-block w-3 h-3 bg-slate-400 rounded-full mr-xs" />Occupied</span></div></div>
               <div className="p-lg grid grid-cols-2 sm:grid-cols-4 gap-md">{compartments.map((tool) => <div key={tool.id} className={`border p-md rounded-lg ${tool.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'}`}><div className="flex justify-between mb-sm"><span className={`font-mono-data font-bold ${tool.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{tool.slot}</span><span className={`material-symbols-outlined text-[18px] ${tool.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{tool.occupied ? 'lock' : 'check_circle'}</span></div><p className="font-label-md truncate">{tool.name}</p></div>)}</div>
             </div>
-            <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm"><div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-primary text-white"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined">warning</span>Overdue Alerts</h4><span className="px-sm py-xs bg-white/20 rounded font-label-md">{overdueTransactions.length} Alerts</span></div><div className="p-md space-y-sm">{overdueTransactions.length ? overdueTransactions.map((item) => <div key={item.id} className="p-md bg-error-container/20 border-l-4 border-primary rounded-r-lg"><div className="flex justify-between"><span className="font-body-md font-bold text-primary">{item.studentId}</span><span className="font-label-md text-primary font-bold">OVERDUE</span></div><p className="text-body-md text-secondary">{item.toolName}</p><p className="mt-sm text-[11px] text-secondary">Due: {new Date(item.dueAt).toLocaleString()}</p></div>) : <p className="p-md text-secondary text-body-md">No overdue tools. Great work!</p>}</div></div>
+            <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm"><div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-primary text-white"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined">warning</span>Overdue Alerts</h4><span className="px-sm py-xs bg-white/20 rounded font-label-md">{alerts.length} Alerts</span></div><div className="p-md space-y-sm">{alerts.length ? alerts.map((item) => <div key={item.id} className="p-md bg-error-container/20 border-l-4 border-primary rounded-r-lg"><div className="flex justify-between"><span className="font-body-md font-bold text-primary">{item.studentId}</span><span className="font-label-md text-primary font-bold">OVERDUE</span></div><p className="text-body-md text-secondary">{item.toolName}</p><p className="mt-sm text-[11px] text-secondary">Due: {new Date(item.dueAt).toLocaleString()}</p></div>) : <p className="p-md text-secondary text-body-md">No overdue tools. Great work!</p>}</div></div>
           </section>
           <section className="bg-white border rounded-xl overflow-hidden shadow-sm">
             <div className="px-lg py-md border-b bg-slate-800 text-white flex justify-between">
