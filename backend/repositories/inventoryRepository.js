@@ -184,6 +184,7 @@ function createInventoryRepository(db) {
         id: transaction.id,
         studentId: transaction.studentId,
         toolName: transaction.toolName,
+        borrowedAt: transaction.borrowedAt,
         dueAt: transaction.dueAt,
         compartmentId: transaction.compartmentId,
       });

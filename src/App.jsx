@@ -1,9 +1,21 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { api } from './api';
+import calculatorImage from './assets/scientific-calculator.svg';
+import wireStripperImage from './assets/wire-stripper.svg';
+import screwdriverImage from './assets/dual-screwdriver.svg';
+import pliersImage from './assets/combination-pliers.svg';
 
 const SessionContext = createContext(null);
 const useSession = () => useContext(SessionContext);
+
+const toolVisuals = {
+  'tool-1': { icon: 'calculate', image: calculatorImage },
+  'tool-2': { icon: 'content_cut', image: wireStripperImage },
+  'tool-3': { icon: 'build', image: screwdriverImage },
+  'tool-4': { icon: 'handyman', image: pliersImage },
+};
+const getToolVisual = (toolId) => toolVisuals[toolId] || { icon: 'precision_manufacturing', image: '' };
 
 function AppProvider({ children }) {
   const [token, setToken] = useState(localStorage.getItem('sessionToken') || '');
@@ -130,26 +142,6 @@ const TopBar = ({ title = 'TUP-Manila Inventory' }) => {
     </header>
   );
 };
-
-const Footer = () => (
-  <footer className="w-full h-12 bg-surface-container-highest border-t border-outline-variant flex items-center px-lg justify-between fixed bottom-0">
-    <div className="flex items-center gap-lg text-secondary">
-      <div className="flex items-center gap-xs">
-        <span className="material-symbols-outlined text-[18px]">wifi</span>
-        <span className="font-label-md text-label-md">TUPM-Secure-Grid</span>
-      </div>
-      <div className="flex items-center gap-xs">
-        <span className="material-symbols-outlined text-[18px]">update</span>
-        <span className="font-label-md text-label-md">Last Sync: Just Now</span>
-      </div>
-    </div>
-    <div className="flex items-center gap-sm">
-      <span className="font-label-md text-label-md text-secondary uppercase tracking-widest">Industrial Precision Interface</span>
-      <span className="w-2 h-2 rounded-full bg-primary"></span>
-      <span className="font-mono-data text-mono-data text-[10px] text-secondary">v2.4.0-REL</span>
-    </div>
-  </footer>
-);
 
 const ScreenWelcome = () => {
   const navigate = useNavigate();
@@ -298,7 +290,7 @@ const ScreenCommands = () => {
   useAuthGuard();
 
   return (
-    <div className="industrial-grid min-h-screen flex flex-col vignette-overlay">
+    <div className="min-h-screen flex flex-col vignette-overlay bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="flex-grow flex flex-col items-center justify-center pt-xl px-lg mt-16 relative">
         <div className="w-full max-w-6xl z-10 py-xl">
@@ -361,7 +353,6 @@ const ScreenCommands = () => {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 };
@@ -390,7 +381,7 @@ const ScreenDeposit = () => {
   }, [navigate, setMessage]);
 
   return (
-    <div className="bg-background text-on-background min-h-screen flex flex-col overflow-hidden">
+    <div className="text-on-background min-h-screen flex flex-col overflow-hidden bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="flex-grow flex items-center justify-center pt-24 px-lg relative">
         <div className="absolute inset-0 opacity-5 pointer-events-none overflow-hidden">
@@ -447,12 +438,12 @@ const ScreenToolSelection = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="pt-24 px-lg pb-xl flex flex-col max-w-screen-2xl mx-auto w-full">
         <header className="mb-lg">
-          <h1 className="font-headline-lg text-headline-lg text-on-background">Select the tool you wish to borrow</h1>
-          <p className="font-body-lg text-body-lg text-secondary mt-xs">Choose from the available high-precision laboratory equipment.</p>
+          <div className="flex items-center gap-sm text-secondary font-label-md text-label-md mb-sm"><span>Lab A</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span>Equipment Kiosk</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span className="text-primary font-bold">Tool Selection</span></div>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-md"><div><h1 className="font-headline-lg text-on-background">Select the tool you wish to borrow</h1><p className="font-body-lg text-secondary mt-xs">Choose from the available high-precision laboratory equipment.</p></div><div className="bg-surface-container-lowest border border-outline-variant p-md rounded-xl flex items-center gap-md shadow-sm"><div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container"><span className="material-symbols-outlined">verified_user</span></div><div><div className="font-label-md text-secondary">Student Access</div><div className="font-title-lg font-mono-data text-on-surface">VERIFIED</div></div></div></div>
         </header>
         {loading ? (
           <div className="p-lg bg-white rounded-xl shadow-sm text-center">Loading available tools...</div>
@@ -462,27 +453,19 @@ const ScreenToolSelection = () => {
               <div
                 key={tool.id}
                 onClick={() => handleSelect(tool)}
-                className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden cursor-pointer hover:shadow-xl transition-all"
+                className="group relative flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98]"
               >
-                <div className="aspect-video relative bg-surface-container flex items-center justify-center text-center p-md">
-                  <div>
-                    <span className="font-title-lg text-title-lg text-on-background">{tool.name}</span>
-                    <div className="text-secondary mt-sm">Slot {tool.slot}</div>
-                  </div>
-                </div>
+                <div className="aspect-video relative overflow-hidden bg-surface-container"><img src={getToolVisual(tool.id).image} alt={tool.name} className="w-full h-full object-cover" /><div className={`${tool.availableQty ? 'bg-emerald-500' : 'bg-slate-500'} absolute top-md right-md text-white font-label-md px-md py-xs rounded-full shadow-lg`}>{tool.availableQty}/{tool.totalQty} Available</div></div>
                 <div className="p-lg flex-1 flex flex-col">
+                  <div className="flex items-center gap-md mb-sm"><span className="material-symbols-outlined text-primary bg-primary-fixed p-sm rounded-lg">{getToolVisual(tool.id).icon}</span><h3 className="font-title-lg text-on-surface">{tool.name}</h3></div>
                   <p className="font-body-md text-secondary mb-lg flex-1">{tool.description}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="font-label-md uppercase tracking-wide text-secondary">Available {tool.availableQty}/{tool.totalQty}</span>
-                    <button className="py-md bg-primary text-on-primary font-label-md rounded-lg transition-all hover:bg-primary-container">SELECT</button>
-                  </div>
+                  <button className="w-full py-md bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary font-label-md rounded-lg transition-all border border-outline-variant group-hover:border-primary">SELECT TOOL</button>
                 </div>
               </div>
             ))}
           </section>
         )}
       </main>
-      <Footer />
     </div>
   );
 };
@@ -526,7 +509,7 @@ const ScreenToolRelease = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="max-w-6xl mx-auto pt-32 pb-12 px-lg">
         <div className="text-center mb-xl">
@@ -541,6 +524,7 @@ const ScreenToolRelease = () => {
             <h3 className="font-title-lg text-primary flex items-center gap-sm mb-lg">Selected Tool</h3>
             <div className="space-y-md">
               <div className="p-lg bg-white rounded-xl border border-outline-variant">
+                <img src={getToolVisual(selectedTool.id).image} alt={selectedTool.name} className="w-full aspect-video object-cover rounded-lg mb-md" />
                 <h3 className="font-headline-md mb-2">{selectedTool.name}</h3>
                 <p className="text-secondary mb-1">{selectedTool.description}</p>
                 <div className="font-mono-data text-label-md uppercase tracking-wide">Assigned slot: {selectedTool.slot}</div>
@@ -584,7 +568,6 @@ const ScreenToolRelease = () => {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 };
@@ -619,41 +602,44 @@ const ScreenReturnConfirm = () => {
   };
 
   return (
-    <div className="industrial-grid min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
-      <main className="flex-grow pt-[80px] px-lg pb-lg flex flex-col items-center justify-center">
-        <div className="w-full max-w-6xl grid grid-cols-12 gap-gutter">
-          <div className="col-span-12 mb-md">
-            <h1 className="font-headline-lg text-on-surface">Confirm Equipment Return</h1>
-            <p className="font-body-md text-secondary">Verify the current transaction before opening the storage compartment.</p>
+      <main className="pt-24 min-h-screen px-lg pb-xl flex flex-col max-w-screen-2xl mx-auto w-full">
+        <header className="mb-lg">
+          <div className="flex items-center gap-sm text-secondary font-label-md text-label-md mb-sm"><span>Lab A</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span>Equipment Kiosk</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span className="text-primary font-bold">Return Confirmation</span></div>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-md">
+            <div><h1 className="font-headline-lg text-on-background">Confirm Equipment Return</h1><p className="font-body-lg text-secondary mt-xs">Verify the current transaction before opening the storage compartment.</p></div>
           </div>
+        </header>
+        <div className="w-full grid grid-cols-12 gap-gutter">
           {loading ? (
             <div className="col-span-12 p-lg bg-white border rounded-xl text-center">Loading active transaction…</div>
           ) : transaction ? (
             <>
               <div className="col-span-12 lg:col-span-7 flex flex-col gap-gutter">
-                <div className="bg-surface-container-lowest border p-lg flex items-center gap-lg">
-                  <div className="w-24 h-24 bg-surface-container border-2 border-primary-fixed overflow-hidden flex-shrink-0 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-primary text-4xl">inventory_2</span>
-                  </div>
+                <div className="bg-surface-container-lowest border border-outline-variant p-lg rounded-xl flex items-center gap-lg shadow-sm">
+                  <div className="w-24 h-24 bg-surface-container border-2 border-primary-fixed overflow-hidden flex-shrink-0 rounded-xl"><img src={getToolVisual(transaction.toolId).image} alt={transaction.toolName} className="w-full h-full object-cover" /></div>
                   <div className="flex-grow">
+                    <span className="font-label-md text-secondary uppercase tracking-tighter">Authorized Borrower</span>
                     <h2 className="font-headline-md">{transaction.studentId}</h2>
-                    <span className="font-mono-data text-secondary">Tool: {transaction.toolName}</span>
-                    <div className="mt-2 font-label-md text-secondary">Due at: {new Date(transaction.dueAt).toLocaleString()}</div>
+                    <span className="font-mono-data text-secondary">Active return session</span>
                   </div>
+                  <span className="font-label-md text-on-primary-fixed-variant bg-primary-fixed px-sm py-xs rounded">ACTIVE SESSION</span>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-gutter"><div className="bg-surface-container-lowest border border-outline-variant p-md rounded-xl flex flex-col justify-between min-h-[150px]"><div><span className="font-label-md text-secondary uppercase">Equipment</span><h3 className="font-title-lg mt-xs">{transaction.toolName}</h3></div><div className="flex items-center gap-xs text-primary font-bold"><span className="material-symbols-outlined">precision_manufacturing</span><span className="font-mono-data">Return inspection required</span></div></div><div className="bg-surface-container-lowest border border-outline-variant p-md rounded-xl flex flex-col justify-between min-h-[150px]"><div><span className="font-label-md text-secondary uppercase">Target Location</span><h3 className="font-title-lg mt-xs">Cabinet {transaction.compartmentId}</h3></div><div className="flex items-center gap-xs text-secondary"><span className="material-symbols-outlined">location_on</span><span className="font-body-md">Laboratory storage locker</span></div></div></div>
                 <div className="bg-on-secondary-fixed text-on-primary p-lg flex justify-between items-center">
                   <div>
-                    <span className="font-label-md text-secondary-fixed-dim uppercase">Return window</span>
-                    <div className="font-display-lg text-display-lg font-mono-data">3 hours</div>
+                    <span className="font-label-md text-secondary-fixed-dim uppercase">Due At</span>
+                    <div className="font-title-lg font-mono-data">{new Date(transaction.dueAt).toLocaleString()}</div>
                   </div>
-                  <div className="flex items-center gap-xs text-secondary-fixed">
+                  <div className="flex items-center gap-xs text-secondary-fixed text-right">
                     <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                    <span className="font-title-lg">Ready</span>
+                    <span className="font-title-lg">Ready for Return</span>
                   </div>
                 </div>
               </div>
               <div className="col-span-12 lg:col-span-5 flex flex-col gap-gutter">
+                <div className="min-h-[260px] relative overflow-hidden bg-surface-container-highest border border-outline-variant rounded-xl flex flex-col items-center justify-end text-center p-lg"><img src={getToolVisual(transaction.toolId).image} alt={transaction.toolName} className="absolute inset-0 w-full h-full object-cover opacity-70" /><div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><div className="relative text-white"><span className="font-label-md uppercase opacity-80">Verify Item Condition</span><h3 className="font-title-lg mt-xs">Ready for Return</h3><p className="mt-sm">Check the tool and accessories before opening the compartment.</p></div></div>
                 <button
                   onClick={handleOpen}
                   className="group relative bg-primary text-on-primary h-24 flex items-center justify-center gap-md rounded shadow-xl hover:bg-surface-tint transition-all"
@@ -675,7 +661,6 @@ const ScreenReturnConfirm = () => {
           )}
         </div>
       </main>
-      <Footer />
     </div>
   );
 };
@@ -716,7 +701,7 @@ const ScreenReturnAction = () => {
   };
 
   return (
-    <div className="bg-background min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="flex-grow pt-24 pb-lg px-xl flex gap-lg container-max mx-auto w-full">
         <section className="w-1/2">
@@ -755,7 +740,6 @@ const ScreenReturnAction = () => {
           </button>
         </section>
       </main>
-      <Footer />
     </div>
   );
 };
@@ -768,9 +752,6 @@ const ScreenAdmin = () => {
   const [summary, setSummary] = useState(null);
   const [tools, setTools] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [search, setSearch] = useState('');
-  const [showOverdueOnly, setShowOverdueOnly] = useState(false);
-  const [lastSynced, setLastSynced] = useState(new Date());
   const [error, setError] = useState('');
 
   const loadDashboard = async () => {
@@ -781,7 +762,6 @@ const ScreenAdmin = () => {
       setSummary(summaryResult);
       setTools(toolsResult.tools || []);
       setAlerts(alertsResult.alerts || []);
-      setLastSynced(new Date());
     } catch (err) {
       sessionStorage.removeItem('adminSessionToken');
       setToken('');
@@ -827,11 +807,25 @@ const ScreenAdmin = () => {
 
   const isOverdue = (transaction) => new Date(transaction.dueAt).getTime() < Date.now();
   const transactions = summary?.activeTransactions || [];
-  const filteredTransactions = transactions.filter((transaction) => {
-    const value = `${transaction.studentId} ${transaction.toolName} ${transaction.compartmentId}`.toLowerCase();
-    return value.includes(search.toLowerCase()) && (!showOverdueOnly || isOverdue(transaction));
+  const compartments = Array.from({ length: 16 }, (_, index) => {
+    const slot = `C-${String(index + 1).padStart(2, '0')}`;
+    const tool = tools.find((item) => item.slot === slot);
+    return {
+      slot,
+      name: tool?.name || 'Unassigned',
+      occupied: transactions.some((transaction) => transaction.compartmentId === slot),
+    };
   });
-  const compartments = tools.map((tool) => ({ ...tool, occupied: transactions.some((transaction) => transaction.compartmentId === tool.slot) }));
+  const formatStatus = (transaction) => {
+    const remainingMinutes = Math.round((new Date(transaction.dueAt).getTime() - Date.now()) / (60 * 1000));
+    if (remainingMinutes < 0) return `Overdue (${remainingMinutes}m)`;
+    if (remainingMinutes < 60) return `Active (${remainingMinutes}m left)`;
+    return `Active (${Math.floor(remainingMinutes / 60)}h left)`;
+  };
+  const formatOverdueDuration = (dueAt) => {
+    const minutes = Math.max(1, Math.floor((Date.now() - new Date(dueAt).getTime()) / (60 * 1000)));
+    return minutes >= 60 ? `+${Math.floor(minutes / 60)}h ${minutes % 60}m` : `+${minutes}m`;
+  };
 
   if (!token) {
     return (
@@ -860,31 +854,22 @@ const ScreenAdmin = () => {
   }
 
   return (
-    <div className="bg-background min-h-screen pb-12">
+    <div className="min-h-screen bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <header className="fixed top-0 w-full z-50 flex justify-between items-center px-lg py-md bg-surface border-b border-outline-variant">
         <div className="flex items-center gap-md">
           <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xs">TUP</div>
-          <span className="font-headline-md text-headline-md font-bold text-primary">TUP-Manila Inventory</span>
+          <span className="font-headline-md text-headline-md font-bold text-primary">Admin Dashboard</span>
         </div>
         <div className="flex items-center gap-md">
-          <label className="hidden md:flex items-center gap-sm bg-surface-container rounded px-sm py-xs border border-outline-variant w-80">
-            <span className="material-symbols-outlined text-secondary">search</span>
-            <input className="bg-transparent border-none focus:ring-0 text-body-md w-full p-0" placeholder="Search tools or students..." value={search} onChange={(event) => setSearch(event.target.value)} />
-          </label>
-          <span className="hidden sm:block font-label-md">ADMIN_SYS</span>
           <div className="relative" title={`${alerts.length} overdue tool notification${alerts.length === 1 ? '' : 's'}`}>
             <span className={`material-symbols-outlined ${alerts.length ? 'text-primary' : 'text-secondary'}`}>notifications</span>
             {alerts.length > 0 && <span className="absolute -right-2 -top-2 min-w-4 h-4 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center">{alerts.length}</span>}
           </div>
-          <button onClick={handleAdminLogout} title="Sign out" className="p-sm hover:bg-surface-container rounded-full text-secondary"><span className="material-symbols-outlined">logout</span></button>
+          <button onClick={handleAdminLogout} className="px-md py-sm bg-secondary text-white rounded">Exit Admin</button>
         </div>
       </header>
       <main className="pt-24 p-lg grid-dots min-h-screen">
         <div className="max-w-[1440px] mx-auto space-y-lg">
-          <div className="flex items-center justify-between gap-md">
-            <div className="flex items-center gap-sm text-[12px] font-label-md bg-white/80 px-md py-1 rounded-full border border-outline-variant shadow-sm"><span className="text-secondary">Admin</span><span className="material-symbols-outlined text-[12px]">chevron_right</span><span className="text-primary font-bold">Real-time Dashboard</span></div>
-            <button onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify(transactions, null, 2)], { type: 'application/json' })); const link = document.createElement('a'); link.href = url; link.download = 'tupm-inventory-report.json'; link.click(); URL.revokeObjectURL(url); }} className="px-md py-sm bg-primary text-white rounded font-bold flex items-center gap-sm text-sm"><span className="material-symbols-outlined text-[18px]">file_download</span>Export Reports</button>
-          </div>
           {error && <p className="text-error font-bold">{error}</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
             <div className="bg-white border p-lg rounded-xl shadow-sm">
@@ -902,15 +887,25 @@ const ScreenAdmin = () => {
           </div>
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-lg">
             <div className="lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-              <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined text-primary">grid_view</span>Storage Compartments Overview</h4><div className="hidden sm:flex gap-md font-label-md"><span><i className="inline-block w-3 h-3 bg-emerald-500 rounded-full mr-xs" />Available</span><span><i className="inline-block w-3 h-3 bg-slate-400 rounded-full mr-xs" />Occupied</span></div></div>
-              <div className="p-lg grid grid-cols-2 sm:grid-cols-4 gap-md">{compartments.map((tool) => <div key={tool.id} className={`border p-md rounded-lg ${tool.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'}`}><div className="flex justify-between mb-sm"><span className={`font-mono-data font-bold ${tool.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{tool.slot}</span><span className={`material-symbols-outlined text-[18px] ${tool.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{tool.occupied ? 'lock' : 'check_circle'}</span></div><p className="font-label-md truncate">{tool.name}</p></div>)}</div>
+              <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+                <h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined text-primary">grid_view</span>Storage Compartments Overview</h4>
+                <div className="flex items-center gap-md text-label-md font-label-md"><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-emerald-500 rounded-full" />Available</span><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-slate-400 rounded-full" />Occupied</span></div>
+              </div>
+              <div className="p-lg grid grid-cols-2 sm:grid-cols-4 gap-md">
+                {compartments.map((compartment) => <div key={compartment.slot} className={`relative group border p-md rounded-lg transition-all hover:shadow-md ${compartment.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'}`}><div className="flex justify-between items-start mb-sm"><span className={`font-mono-data font-bold ${compartment.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{compartment.slot}</span><span className={`material-symbols-outlined text-[18px] ${compartment.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{compartment.occupied ? 'lock' : 'check_circle'}</span></div><p className="font-label-md truncate text-on-surface">{compartment.name}</p></div>)}
+              </div>
             </div>
-            <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm"><div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-primary text-white"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined">warning</span>Overdue Alerts</h4><span className="px-sm py-xs bg-white/20 rounded font-label-md">{alerts.length} Alerts</span></div><div className="p-md space-y-sm">{alerts.length ? alerts.map((item) => <div key={item.id} className="p-md bg-error-container/20 border-l-4 border-primary rounded-r-lg"><div className="flex justify-between"><span className="font-body-md font-bold text-primary">{item.studentId}</span><span className="font-label-md text-primary font-bold">OVERDUE</span></div><p className="text-body-md text-secondary">{item.toolName}</p><p className="mt-sm text-[11px] text-secondary">Due: {new Date(item.dueAt).toLocaleString()}</p></div>) : <p className="p-md text-secondary text-body-md">No overdue tools. Great work!</p>}</div></div>
+            <aside className="lg:col-span-4 flex flex-col gap-lg">
+              <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm flex-1">
+                <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-primary text-white"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined">warning</span>Overdue Alerts</h4><span className="px-sm py-xs bg-white/20 rounded font-label-md">{alerts.length} Alerts</span></div>
+                <div className="p-md space-y-sm">{alerts.length ? alerts.map((item) => <div key={item.id} className="p-md bg-error-container/20 border-l-4 border-primary rounded-r-lg space-y-xs"><div className="flex justify-between items-start"><span className="font-body-md font-bold text-primary">{item.studentId}</span><span className="font-label-md text-primary font-bold">{formatOverdueDuration(item.dueAt)}</span></div><p className="text-body-md text-secondary">{item.toolName}</p><div className="flex justify-between items-center mt-sm"><span className="text-[11px] uppercase tracking-tighter text-secondary">Due: {new Date(item.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><button onClick={() => window.alert(`Overdue tool notification\nStudent: ${item.studentId}\nTool: ${item.toolName}`)} className="text-primary font-bold text-[12px] underline">Notify Student</button></div></div>) : <p className="p-md text-secondary text-body-md">No overdue tools. Great work!</p>}</div>
+              </div>
+            </aside>
           </section>
           <section className="bg-white border rounded-xl overflow-hidden shadow-sm">
-            <div className="px-lg py-md border-b bg-slate-800 text-white flex justify-between">
+            <div className="px-lg py-md border-b bg-slate-800 text-white flex justify-between items-center">
               <h4 className="font-bold uppercase tracking-wide">Active Tool Transactions</h4>
-              <div className="flex gap-sm"><button onClick={() => setShowOverdueOnly((value) => !value)} className={`font-label-md uppercase ${showOverdueOnly ? 'text-white' : 'text-secondary/80'}`}>Filter</button><button onClick={loadDashboard} className="font-label-md uppercase text-secondary/80">Refresh</button></div>
+              <button onClick={loadDashboard} className="font-label-md uppercase text-secondary/80">Refresh</button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -918,26 +913,30 @@ const ScreenAdmin = () => {
                   <tr>
                     <th className="p-4">Student ID</th>
                     <th className="p-4">Tool</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Due At</th>
+                    <th className="p-4">Compartment</th>
+                    <th className="p-4">Time Borrowed</th>
+                    <th className="p-4">Time Remaining</th>
+                    <th className="p-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y text-sm">
-                  {filteredTransactions.map((item) => (
+                  {transactions.map((item) => (
                     <tr key={`active-${item.id}`}>
-                      <td className="p-4 font-bold">{item.studentId}</td>
+                      <td className={`p-4 font-bold ${isOverdue(item) ? 'text-primary' : ''}`}>{item.studentId}</td>
                       <td className="p-4">{item.toolName}</td>
-                      <td className={`p-4 ${isOverdue(item) ? 'text-primary' : 'text-emerald-600'}`}>{isOverdue(item) ? 'Overdue' : 'Active'}</td>
-                      <td className="p-4">{new Date(item.dueAt).toLocaleString()}</td>
+                      <td className="p-4">{item.compartmentId}</td>
+                      <td className="p-4">{new Date(item.borrowedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className={`p-4 ${isOverdue(item) ? 'text-primary' : 'text-emerald-600'}`}>{formatStatus(item)}</td>
+                      <td className="p-4"><button onClick={() => window.alert(`Transaction ${item.id}\nTool: ${item.toolName}\nDue: ${new Date(item.dueAt).toLocaleString()}`)} className="text-primary font-bold">{isOverdue(item) ? 'Notify' : 'Details'}</button></td>
                     </tr>
                   ))}
+                  {!transactions.length && <tr><td colSpan="6" className="p-4 text-center text-secondary">No active tool transactions.</td></tr>}
                 </tbody>
               </table>
             </div>
           </section>
         </div>
       </main>
-      <footer className="fixed bottom-0 right-0 left-0 bg-surface border-t border-outline-variant px-lg py-xs flex justify-between items-center z-30 text-[11px] font-mono-data text-secondary"><span><i className="inline-block w-2 h-2 bg-emerald-500 rounded-full mr-xs animate-pulse" />SERVER: CLUSTER-01A (ONLINE)</span><span>Last Synced: {lastSynced.toLocaleTimeString()}</span></footer>
     </div>
   );
 };
