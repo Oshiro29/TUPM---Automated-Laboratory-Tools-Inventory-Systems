@@ -32,6 +32,9 @@ export const api = {
   scan(qrData) {
     return request('/scan', { method: 'POST', body: { qrData } });
   },
+  validateQr(qrData) {
+    return request('/validate-qr', { method: 'POST', body: { qrData } });
+  },
   getCurrentStudent(token) {
     return request('/student/me', { token });
   },

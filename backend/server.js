@@ -75,6 +75,14 @@ async function createApp() {
     return res.json({ token: createSessionToken(student.id), student: buildStudentPayload(student) });
   });
 
+  app.post('/api/validate-qr', async (req, res) => {
+    const { qrData } = req.body;
+    if (!qrData) return res.status(400).json({ message: 'QR data is required.' });
+    const student = await repository.findStudentById(qrData.trim());
+    if (!student) return res.status(404).json({ message: 'Student not found by QR code.' });
+    return res.json({ student: buildStudentPayload(student) });
+  });
+
   app.get('/api/student/me', authMiddleware, (req, res) => res.json({ student: buildStudentPayload(req.student) }));
   app.get('/api/tools', authMiddleware, async (req, res) => res.json({ tools: await repository.listTools() }));
 

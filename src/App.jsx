@@ -1,5 +1,6 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import jsQR from 'jsqr';
 import { api } from './api';
 import calculatorImage from './assets/scientific-calculator.svg';
 import wireStripperImage from './assets/wire-stripper.svg';
@@ -16,6 +17,283 @@ const toolVisuals = {
   'tool-4': { icon: 'handyman', image: pliersImage },
 };
 const getToolVisual = (toolId) => toolVisuals[toolId] || { icon: 'precision_manufacturing', image: '' };
+const hardwareCompartmentId = 'C03';
+
+function QrScannerOverlay({ open, onClose, onScan, onFallback, error, setError }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const frameRef = useRef(null);
+  const onScanRef = useRef(onScan);
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const stopCamera = () => {
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
+
+    const scanFrame = () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
+      if (!video || !canvas || video.readyState < 2) {
+        frameRef.current = requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+
+      if (!width || !height) {
+        frameRef.current = requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) {
+        frameRef.current = requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      context.drawImage(video, 0, 0, width, height);
+      const imageData = context.getImageData(0, 0, width, height);
+      const code = jsQR(imageData.data, width, height, { inversionAttempts: 'dontInvert' });
+
+      if (code?.data) {
+        onScanRef.current(code.data.trim());
+        return;
+      }
+
+      frameRef.current = requestAnimationFrame(scanFrame);
+    };
+
+    const startCamera = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('This browser does not support webcam access.');
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: 'environment' },
+          },
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        setError('');
+        scanFrame();
+      } catch (err) {
+        setError(err.message || 'Unable to access the webcam.');
+      }
+    };
+
+    if (open) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+
+    return () => {
+      cancelled = true;
+      stopCamera();
+    };
+  }, [open, setError]);
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-on-background/85 backdrop-blur-xl flex items-center justify-center px-md py-lg">
+      <div className="w-full max-w-5xl bg-surface-container-lowest border border-outline-variant shadow-2xl rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-lg py-md border-b border-outline-variant bg-surface-container-low">
+          <div>
+            <h3 className="font-title-lg text-on-background">Scan Student QR</h3>
+            <p className="font-label-md text-secondary uppercase tracking-widest">Allow camera access to continue</p>
+          </div>
+          <button onClick={onClose} className="px-md py-sm rounded-full bg-surface-container-high text-secondary hover:text-on-background transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
+          <div className="lg:col-span-8 p-lg bg-surface-container-lowest">
+            <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-outline-variant bg-black">
+              <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted autoPlay />
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/20" />
+                <div className="absolute inset-[14%] rounded-2xl border-2 border-dashed border-white/70" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-32 h-32 border-4 border-primary rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.18)]" />
+                </div>
+                <div className="absolute left-0 top-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent scan-line opacity-80" />
+              </div>
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+          </div>
+          <div className="lg:col-span-4 p-lg bg-surface-container-low border-t lg:border-t-0 lg:border-l border-outline-variant flex flex-col justify-between gap-lg">
+            <div className="space-y-md">
+              <div className="p-md rounded-xl border border-outline-variant bg-white">
+                <div className="font-label-md text-secondary uppercase tracking-widest mb-xs">How it works</div>
+                <p className="font-body-md text-on-background">Point the camera at the student QR code. Once detected, the system will verify the student record before PIN entry.</p>
+              </div>
+              {error ? (
+                <div className="p-md rounded-xl border border-error bg-error-container text-error font-body-md">{error}</div>
+              ) : (
+                <div className="p-md rounded-xl border border-outline-variant bg-surface-container-lowest text-secondary font-body-md">
+                  Make sure the QR code is fully inside the frame and well lit.
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-sm">
+              <button onClick={onFallback} className="w-full py-md bg-primary text-on-primary font-label-md uppercase tracking-wider rounded-lg hover:bg-primary-container transition-colors">
+                Use manual login instead
+              </button>
+              <button onClick={onClose} className="w-full py-md bg-surface-container-high text-secondary font-label-md uppercase tracking-wider rounded-lg hover:text-on-background transition-colors">
+                Cancel scanning
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentConfirmationModal({ student, open, pin, setPin, onConfirm, onCancel, busy, error }) {
+  if (!open || !student) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-on-background/75 backdrop-blur-lg flex items-center justify-center px-md py-lg">
+      <div className="w-full max-w-2xl bg-surface-container-lowest border border-outline-variant shadow-2xl rounded-xl overflow-hidden">
+        <div className="px-lg py-md bg-surface-container-low border-b border-outline-variant flex items-center justify-between">
+          <div>
+            <h3 className="font-title-lg text-on-background">Confirm Student</h3>
+            <p className="font-label-md text-secondary uppercase tracking-widest">Second validation before PIN entry</p>
+          </div>
+          <button onClick={onCancel} className="px-md py-sm rounded-full bg-surface-container-high text-secondary hover:text-on-background transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div className="p-lg grid grid-cols-1 md:grid-cols-2 gap-lg">
+          <div className="space-y-md">
+            <div className="p-md rounded-xl border border-outline-variant bg-surface-container-low">
+              <div className="font-label-md text-secondary uppercase tracking-widest mb-xs">Student ID</div>
+              <div className="font-headline-md text-on-background">{student.id}</div>
+            </div>
+            <div className="p-md rounded-xl border border-outline-variant bg-surface-container-low">
+              <div className="font-label-md text-secondary uppercase tracking-widest mb-xs">Student Name</div>
+              <div className="font-title-lg text-on-background">{student.name}</div>
+            </div>
+            <div className="p-md rounded-xl border border-outline-variant bg-surface-container-low">
+              <div className="font-label-md text-secondary uppercase tracking-widest mb-xs">Email</div>
+              <div className="font-body-md text-on-background break-words">{student.email}</div>
+            </div>
+          </div>
+          <div className="flex flex-col justify-between gap-lg">
+            <div className="p-md rounded-xl border border-outline-variant bg-white space-y-md">
+              <div>
+                <div className="font-label-md text-secondary uppercase tracking-widest mb-xs">Enter PIN</div>
+                <p className="font-body-md text-secondary">Continue only if the scanned student details are correct.</p>
+              </div>
+              <input
+                autoFocus
+                className="w-full bg-surface-container-lowest border border-outline-variant px-md py-sm font-body-md text-on-background focus:outline-none focus:border-primary rounded"
+                placeholder="Student PIN"
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+              />
+              {error && <p className="text-error font-bold">{error}</p>}
+            </div>
+            <div className="flex gap-sm">
+              <button onClick={onCancel} className="flex-1 py-md bg-surface-container-high text-secondary font-label-md uppercase tracking-wider rounded-lg hover:text-on-background transition-colors">
+                Back
+              </button>
+              <button onClick={onConfirm} disabled={busy} className="flex-1 py-md bg-primary text-on-primary font-label-md uppercase tracking-wider rounded-lg hover:bg-primary-container transition-colors disabled:opacity-60">
+                {busy ? 'Verifying...' : 'Confirm PIN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransactionSuccessModal({ open, title, message, details = [], actionLabel = 'Close', onClose }) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[90] bg-on-background/75 backdrop-blur-lg flex items-center justify-center px-md py-lg">
+      <div className="w-full max-w-2xl bg-surface-container-lowest border border-outline-variant shadow-2xl rounded-xl overflow-hidden">
+        <div className="px-lg py-md bg-surface-container-low border-b border-outline-variant flex items-center gap-md">
+          <div className="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-primary shrink-0">
+            <span className="material-symbols-outlined text-[30px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+              verified
+            </span>
+          </div>
+          <div>
+            <h3 className="font-title-lg text-on-background">{title}</h3>
+            <p className="font-label-md text-secondary uppercase tracking-widest">Transaction complete</p>
+          </div>
+        </div>
+        <div className="p-lg space-y-lg">
+          <div className="p-md rounded-xl border border-outline-variant bg-surface-container-low">
+            <p className="font-body-md text-on-background">{message}</p>
+          </div>
+          {details.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-md">
+              {details.map((detail) => (
+                <div key={`${detail.label}-${detail.value}`} className="p-md rounded-xl border border-outline-variant bg-white">
+                  <div className="font-label-md text-secondary uppercase tracking-widest mb-xs">{detail.label}</div>
+                  <div className="font-title-lg text-on-background">{detail.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={onClose} className="w-full py-md bg-primary text-on-primary font-label-md uppercase tracking-wider rounded-lg hover:bg-primary-container transition-colors">
+            {actionLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AppProvider({ children }) {
   const [token, setToken] = useState(localStorage.getItem('sessionToken') || '');
@@ -145,10 +423,15 @@ const TopBar = ({ title = 'TUP-Manila Inventory' }) => {
 
 const ScreenWelcome = () => {
   const navigate = useNavigate();
-  const { login, scan, user, message, setMessage, error, setError } = useSession();
+  const { login, user, message, setMessage, error, setError } = useSession();
   const [studentId, setStudentId] = useState('');
   const [pin, setPin] = useState('4321');
   const [busy, setBusy] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState('');
+  const [pendingStudent, setPendingStudent] = useState(null);
+  const [pendingPin, setPendingPin] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -156,23 +439,74 @@ const ScreenWelcome = () => {
     }
   }, [user, navigate]);
 
-  const handleScan = async () => {
-    const qrData = window.prompt('Enter QR payload (e.g. TUPM-23-1111)');
+  const handleScan = () => {
+    setScannerError('');
+    setError('');
+    setScannerOpen(true);
+  };
+
+  const handleQrDetected = async (qrData) => {
     if (!qrData) {
       return;
     }
 
     setBusy(true);
     setError('');
+    setScannerError('');
+
     try {
-      await scan(qrData.trim());
-      setMessage('Student recognized. Redirecting to commands...');
-      navigate('/commands');
+      const result = await api.validateQr(qrData.trim());
+      setPendingStudent(result.student);
+      setPendingPin('');
+      setScannerOpen(false);
+      setConfirmOpen(true);
+      setMessage('Student verified. Please confirm the details and enter the PIN.');
     } catch (err) {
+      setScannerError(err.message);
       setError(err.message);
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleUseManualLogin = () => {
+    setScannerOpen(false);
+    setScannerError('');
+  };
+
+  const handleConfirmPin = async () => {
+    if (!pendingStudent) {
+      return;
+    }
+
+    if (!pendingPin.trim()) {
+      setScannerError('Enter the student PIN to continue.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    setScannerError('');
+
+    try {
+      await login(pendingStudent.id, pendingPin.trim());
+      setConfirmOpen(false);
+      setPendingStudent(null);
+      setPendingPin('');
+      setMessage('Login successful. Redirecting...');
+      navigate('/commands');
+    } catch (err) {
+      setScannerError(err.message);
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancelConfirm = () => {
+    setConfirmOpen(false);
+    setPendingStudent(null);
+    setPendingPin('');
   };
 
   const handleLogin = async () => {
@@ -270,6 +604,24 @@ const ScreenWelcome = () => {
           </div>
         </div>
       </main>
+      <QrScannerOverlay
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleQrDetected}
+        onFallback={handleUseManualLogin}
+        error={scannerError}
+        setError={setScannerError}
+      />
+      <StudentConfirmationModal
+        open={confirmOpen}
+        student={pendingStudent}
+        pin={pendingPin}
+        setPin={setPendingPin}
+        onConfirm={handleConfirmPin}
+        onCancel={handleCancelConfirm}
+        busy={busy}
+        error={scannerError}
+      />
       <footer className="p-md bg-surface-container-low border-t border-outline-variant flex justify-center gap-xl">
         <div className="flex items-center gap-sm">
           <span className="material-symbols-outlined text-secondary text-sm">security</span>
@@ -474,6 +826,8 @@ const ScreenToolRelease = () => {
   const navigate = useNavigate();
   const { token, selectedTool, setError, setMessage } = useSession();
   const [busy, setBusy] = useState(false);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successPayload, setSuccessPayload] = useState(null);
 
   useAuthGuard();
 
@@ -493,10 +847,18 @@ const ScreenToolRelease = () => {
     setError('');
 
     try {
-      await api.borrow(selectedTool.id, selectedTool.slot, token);
-      await api.openCompartment(selectedTool.slot, token);
+      await api.borrow(selectedTool.id, hardwareCompartmentId, token);
+      await api.openCompartment(hardwareCompartmentId, token);
+      setSuccessPayload({
+        title: 'Borrow Successful',
+        message: `Borrow confirmed. ${selectedTool.name} has been assigned and the locker opened at ${hardwareCompartmentId}.`,
+        details: [
+          { label: 'Tool', value: selectedTool.name },
+          { label: 'Compartment', value: hardwareCompartmentId },
+        ],
+      });
+      setSuccessOpen(true);
       setMessage(`Borrow confirmed. ${selectedTool.name} assigned to ${selectedTool.slot}.`);
-      navigate('/commands');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -567,6 +929,18 @@ const ScreenToolRelease = () => {
             </button>
           </div>
         </div>
+        <TransactionSuccessModal
+          open={successOpen}
+          title={successPayload?.title || 'Transaction Successful'}
+          message={successPayload?.message || ''}
+          details={successPayload?.details || []}
+          actionLabel="Return to Home"
+          onClose={() => {
+            setSuccessOpen(false);
+            setSuccessPayload(null);
+            navigate('/commands');
+          }}
+        />
       </main>
     </div>
   );
@@ -594,7 +968,7 @@ const ScreenReturnConfirm = () => {
     }
     setError('');
     try {
-      await api.openCompartment(transaction.compartmentId || 'ID-01', token);
+      await api.openCompartment(hardwareCompartmentId, token);
       navigate('/return-action');
     } catch (err) {
       setError(err.message);
@@ -647,7 +1021,7 @@ const ScreenReturnConfirm = () => {
                   <span className="material-symbols-outlined text-4xl">meeting_room</span>
                   <div className="text-left">
                     <span className="font-headline-md block">OPEN COMPARTMENT</span>
-                    <span className="font-label-md uppercase opacity-80">{transaction.compartmentId || 'ID-01'} will unlock immediately</span>
+                    <span className="font-label-md uppercase opacity-80">{hardwareCompartmentId} will unlock immediately</span>
                   </div>
                 </button>
                 <button onClick={() => navigate('/commands')} className="bg-surface-container-high text-secondary h-14 flex items-center justify-center gap-sm">
@@ -670,6 +1044,8 @@ const ScreenReturnAction = () => {
   const { token, setError, setMessage } = useSession();
   const [transaction, setTransaction] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successPayload, setSuccessPayload] = useState(null);
 
   useAuthGuard();
 
@@ -689,10 +1065,18 @@ const ScreenReturnAction = () => {
     setError('');
 
     try {
-      await api.openCompartment(transaction.compartmentId || 'ID-01', token);
-      await api.returnTransaction(transaction.id, transaction.compartmentId || 'ID-01', token);
+      await api.openCompartment(hardwareCompartmentId, token);
+      await api.returnTransaction(transaction.id, hardwareCompartmentId, token);
+      setSuccessPayload({
+        title: 'Return Successful',
+        message: 'Return completed. Thank you for using the lab inventory kiosk.',
+        details: [
+          { label: 'Transaction', value: transaction.id },
+          { label: 'Compartment', value: hardwareCompartmentId },
+        ],
+      });
+      setSuccessOpen(true);
       setMessage('Return completed. Thank you!');
-      navigate('/commands');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -709,7 +1093,7 @@ const ScreenReturnAction = () => {
             <h2 className="font-title-lg mb-lg">Locker Status</h2>
             <div className="grid grid-cols-4 gap-2 flex-grow">
               <div className="col-span-4 h-16 border rounded flex items-center justify-between px-md unlocked-highlight">
-                <span className="font-mono-data font-bold">{transaction?.compartmentId || 'ID-01'}</span>
+                <span className="font-mono-data font-bold">{hardwareCompartmentId}</span>
                 <span className="text-primary font-bold">UNLOCKED</span>
                 <span className="material-symbols-outlined text-primary">lock_open</span>
               </div>
@@ -728,7 +1112,7 @@ const ScreenReturnAction = () => {
           <div className="flex flex-col gap-md">
             <div className="p-md bg-white border rounded-xl flex gap-md">
               <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">1</div>
-              <p>Place tool back into compartment {transaction?.compartmentId || 'ID-01'}.</p>
+              <p>Place tool back into compartment {hardwareCompartmentId}.</p>
             </div>
             <div className="p-md bg-white border rounded-xl flex gap-md">
               <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">2</div>
@@ -740,6 +1124,18 @@ const ScreenReturnAction = () => {
           </button>
         </section>
       </main>
+      <TransactionSuccessModal
+        open={successOpen}
+        title={successPayload?.title || 'Transaction Successful'}
+        message={successPayload?.message || ''}
+        details={successPayload?.details || []}
+        actionLabel="Return to Home"
+        onClose={() => {
+          setSuccessOpen(false);
+          setSuccessPayload(null);
+          navigate('/commands');
+        }}
+      />
     </div>
   );
 };
