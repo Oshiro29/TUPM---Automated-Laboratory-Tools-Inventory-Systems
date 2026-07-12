@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
+  import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { api } from './api';
-import calculatorImage from './assets/scientific-calculator.svg';
-import wireStripperImage from './assets/wire-stripper.svg';
-import screwdriverImage from './assets/dual-screwdriver.svg';
-import pliersImage from './assets/combination-pliers.svg';
+import calculatorImage from './assets/calculator.jpg';
+import wireStripperImage from './assets/wirestripper.jpg';
+import screwdriverImage from './assets/screwdriver.jpg';
+import pliersImage from './assets/pliers.jpg';
+import pesoOld from './assets/peso-old.jpg';
+import pesoNew from './assets/peso-new.jpg';
 
 const SessionContext = createContext(null);
 const useSession = () => useContext(SessionContext);
@@ -711,26 +713,26 @@ const ScreenCommands = () => {
 
 const ScreenDeposit = () => {
   const navigate = useNavigate();
-  const { setMessage } = useSession();
-  const [status, setStatus] = useState('Authorizing session...');
+  const { setMessage, token } = useSession();
+  const [status, setStatus] = useState('Please insert a single ₱10.00 coin');
+  const [loading, setLoading] = useState(false);
 
   useAuthGuard();
 
-  useEffect(() => {
-    const timer1 = setTimeout(() => setStatus('Validating account and tool access...'), 1200);
-    const timer2 = setTimeout(() => setStatus('Preparing available tool list...'), 2600);
-    const timer3 = setTimeout(() => {
-      setStatus('Ready to select a tool');
-      setMessage('Session verified. Choose a tool to borrow.');
+  const handleInsert = async () => {
+    setLoading(true);
+    setStatus('Processing coin...');
+    try {
+      // verify session / credentials against backend
+      await api.getCurrentStudent(token);
+      setMessage('Coin received. Session verified.');
       navigate('/tool-selection');
-    }, 4200);
-
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-    };
-  }, [navigate, setMessage]);
+    } catch (err) {
+      setStatus(err.message || 'Unable to verify session.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="text-on-background min-h-screen flex flex-col overflow-hidden bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
@@ -745,20 +747,43 @@ const ScreenDeposit = () => {
         </div>
         <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-xl items-center z-10">
           <div className="space-y-lg">
-            <h2 className="font-display-lg text-display-lg text-on-surface leading-tight">Session confirmed</h2>
+            <h2 className="font-display-lg text-display-lg text-on-surface leading-tight">Please Insert</h2>
+            <h3 className="font-headline-lg text-4xl text-on-surface">₱10.00</h3>
             <p className="font-body-lg text-body-lg text-secondary max-w-md">
-              Your student credential is valid. The system is preparing the current tool inventory and compartment mapping.
+              To proceed with the equipment rental, please insert a single ten-peso coin into the coin slot located to your right.
             </p>
-            <div className="p-md rounded-xl border bg-surface-container-highest border-outline-variant">
+
+            <div className="mt-md p-md rounded-xl border bg-surface-container-highest border-outline-variant">
               <div className="font-title-lg text-title-lg text-on-surface mb-sm">{status}</div>
-              <div className="font-label-md text-label-md text-secondary uppercase">Please wait while the system loads the available tools.</div>
+              <div className="font-label-md text-label-md text-secondary uppercase">Please insert ₱10.00 to proceed</div>
+            </div>
+
+            <div className="mt-lg">
+              <button onClick={() => navigate('/')} className="px-md py-sm border rounded mr-md">Cancel Transaction</button>
             </div>
           </div>
+
           <div className="relative flex flex-col items-center">
-            <div className="w-72 h-72 relative flex items-center justify-center">
-              <div className="absolute inset-0 border-2 border-dashed border-outline-variant rounded-full animate-[spin_20s_linear_infinite]"></div>
-              <div className="w-60 h-60 rounded-full border-4 border-outline-variant bg-surface-container-highest flex items-center justify-center shadow-2xl">
-                <span className="material-symbols-outlined text-[120px] text-primary">inventory_2</span>
+            <div className="flex items-center gap-md">
+              <button onClick={handleInsert} disabled={loading} className="flex flex-col items-center">
+                <div className="w-40 h-40 rounded-full bg-white flex items-center justify-center shadow-md overflow-hidden border">
+                  <img src={pesoOld} alt="old-₱10" className="w-32 h-32 object-contain" />
+                </div>
+                <div className="mt-sm font-label-md text-secondary">Old ₱10</div>
+              </button>
+
+              <button onClick={handleInsert} disabled={loading} className="flex flex-col items-center">
+                <div className="w-40 h-40 rounded-full bg-white flex items-center justify-center shadow-md overflow-hidden border">
+                  <img src={pesoNew} alt="new-₱10" className="w-32 h-32 object-contain" />
+                </div>
+                <div className="mt-sm font-label-md text-secondary">New ₱10</div>
+              </button>
+            </div>
+
+            <div className="mt-lg w-80">
+              <div className="p-md bg-white rounded-lg border border-outline flex items-center gap-md">
+                <span className="material-symbols-outlined text-secondary">query_builder</span>
+                <div className="font-label-md">{loading ? 'Processing coin...' : 'Waiting for coin...'}</div>
               </div>
             </div>
           </div>
@@ -807,7 +832,7 @@ const ScreenToolSelection = () => {
                 onClick={() => handleSelect(tool)}
                 className="group relative flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden cursor-pointer hover:shadow-xl transition-all active:scale-[0.98]"
               >
-                <div className="aspect-video relative overflow-hidden bg-surface-container"><img src={getToolVisual(tool.id).image} alt={tool.name} className="w-full h-full object-cover" /><div className={`${tool.availableQty ? 'bg-emerald-500' : 'bg-slate-500'} absolute top-md right-md text-white font-label-md px-md py-xs rounded-full shadow-lg`}>{tool.availableQty}/{tool.totalQty} Available</div></div>
+                <div className="aspect-video relative overflow-hidden bg-surface-container"><img src={getToolVisual(tool.id).image} alt={tool.name} className="w-full h-full object-contain object-center bg-white" /><div className={`${tool.availableQty ? 'bg-emerald-500' : 'bg-slate-500'} absolute top-md right-md text-white font-label-md px-md py-xs rounded-full shadow-lg`}>{tool.availableQty}/{tool.totalQty} Available</div></div>
                 <div className="p-lg flex-1 flex flex-col">
                   <div className="flex items-center gap-md mb-sm"><span className="material-symbols-outlined text-primary bg-primary-fixed p-sm rounded-lg">{getToolVisual(tool.id).icon}</span><h3 className="font-title-lg text-on-surface">{tool.name}</h3></div>
                   <p className="font-body-md text-secondary mb-lg flex-1">{tool.description}</p>
