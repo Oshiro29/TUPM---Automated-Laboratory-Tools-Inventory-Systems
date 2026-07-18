@@ -15,7 +15,9 @@ function mapTool(row) {
   };
 }
 
-function mapTransaction(row) {
+function mapTransaction(row, now = Date.now()) {
+  const isReturned = Boolean(row && row.returned_at);
+  const isOverdue = Boolean(row && !isReturned && now > row.due_at);
   return row && {
     id: row.id,
     studentId: row.student_id,
@@ -27,6 +29,8 @@ function mapTransaction(row) {
     dueAt: row.due_at,
     returnedAt: row.returned_at,
     ...(row.return_compartment_id ? { returnCompartmentId: row.return_compartment_id } : {}),
+    status: isReturned ? 'returned' : (isOverdue ? 'overdue' : 'active'),
+    isOverdue,
   };
 }
 
@@ -58,6 +62,10 @@ function createInventoryRepository(db) {
     JOIN students ON students.id = tx.student_id
     JOIN tools ON tools.id = tx.tool_id`;
 
+  function normalizeSearch(search) {
+    return `%${String(search || '').trim().replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+  }
+
   async function syncOverdueAlerts(now) {
     return serializeWrite(async () => {
       const overdueRows = await db.all(`${transactionSelect}
@@ -78,6 +86,93 @@ function createInventoryRepository(db) {
   return {
     async findStudentById(studentId) {
       return mapStudent(await db.get('SELECT id, name, pin, email FROM students WHERE id = ?', [studentId]));
+    },
+
+    async listStudents({ search = '', status = 'all' } = {}, now = Date.now()) {
+      await syncOverdueAlerts(now);
+      const rows = await db.all(
+        `SELECT s.id, s.name, s.pin, s.email,
+          COALESCE(active_counts.active_count, 0) AS active_count,
+          COALESCE(overdue_counts.overdue_count, 0) AS overdue_count,
+          last_borrow.last_borrowed_at AS last_borrowed_at
+        FROM students s
+        LEFT JOIN (
+          SELECT student_id, COUNT(*) AS active_count
+          FROM transactions
+          WHERE returned_at IS NULL
+          GROUP BY student_id
+        ) AS active_counts ON active_counts.student_id = s.id
+        LEFT JOIN (
+          SELECT student_id, COUNT(*) AS overdue_count
+          FROM transactions
+          WHERE returned_at IS NULL AND due_at < ?
+          GROUP BY student_id
+        ) AS overdue_counts ON overdue_counts.student_id = s.id
+        LEFT JOIN (
+          SELECT student_id, MAX(borrowed_at) AS last_borrowed_at
+          FROM transactions
+          GROUP BY student_id
+        ) AS last_borrow ON last_borrow.student_id = s.id
+        WHERE s.id LIKE ? ESCAPE '\\' OR s.name LIKE ? ESCAPE '\\' OR s.email LIKE ? ESCAPE '\\'
+        ORDER BY s.name COLLATE NOCASE ASC`,
+        [now, normalizeSearch(search), normalizeSearch(search), normalizeSearch(search)],
+      );
+
+      return rows
+        .map((student) => ({
+          ...mapStudent(student),
+          activeBorrowCount: student.active_count,
+          overdueBorrowCount: student.overdue_count,
+          lastBorrowedAt: student.last_borrowed_at,
+        }))
+        .filter((student) => {
+          if (status === 'active') return student.activeBorrowCount > 0;
+          if (status === 'overdue') return student.overdueBorrowCount > 0;
+          if (status === 'inactive') return student.activeBorrowCount === 0;
+          return true;
+        });
+    },
+
+    async createStudent({ id, name, pin, email }) {
+      return serializeWrite(async () => {
+        await db.run('INSERT INTO students (id, name, pin, email) VALUES (?, ?, ?, ?)', [id, name, pin, email]);
+        return mapStudent(await db.get('SELECT id, name, pin, email FROM students WHERE id = ?', [id]));
+      });
+    },
+
+    async updateStudent(studentId, { name, pin, email }) {
+      return serializeWrite(async () => {
+        await db.run('UPDATE students SET name = ?, pin = ?, email = ? WHERE id = ?', [name, pin, email, studentId]);
+        return mapStudent(await db.get('SELECT id, name, pin, email FROM students WHERE id = ?', [studentId]));
+      });
+    },
+
+    async getStudentHistory(studentId, now = Date.now()) {
+      await syncOverdueAlerts(now);
+      const rows = await db.all(`${transactionSelect} WHERE tx.student_id = ? ORDER BY tx.borrowed_at DESC`, [studentId]);
+      return rows.map((row) => mapTransaction(row, now));
+    },
+
+    async listAuditTransactions({ search = '', status = 'all' } = {}, now = Date.now()) {
+      await syncOverdueAlerts(now);
+      const rows = await db.all(
+        `${transactionSelect}
+         WHERE tx.id LIKE ? ESCAPE '\\'
+            OR tx.student_id LIKE ? ESCAPE '\\'
+            OR students.name LIKE ? ESCAPE '\\'
+            OR tools.name LIKE ? ESCAPE '\\'
+         ORDER BY tx.borrowed_at DESC`,
+        [normalizeSearch(search), normalizeSearch(search), normalizeSearch(search), normalizeSearch(search)],
+      );
+
+      return rows
+        .map((row) => mapTransaction(row, now))
+        .filter((transaction) => {
+          if (status === 'active') return transaction.status === 'active';
+          if (status === 'returned') return transaction.status === 'returned';
+          if (status === 'overdue') return transaction.status === 'overdue';
+          return true;
+        });
     },
 
     async listTools() {
@@ -178,7 +273,7 @@ function createInventoryRepository(db) {
     async getAdminSummary(now) {
       await syncOverdueAlerts(now);
       const rows = await db.all(`${transactionSelect} WHERE tx.returned_at IS NULL ORDER BY tx.borrowed_at DESC`);
-      const transactions = rows.map(mapTransaction);
+      const transactions = rows.map((row) => mapTransaction(row, now));
       const overdueTransactions = transactions.filter((transaction) => now > transaction.dueAt);
       const summaryTransaction = (transaction) => ({
         id: transaction.id,

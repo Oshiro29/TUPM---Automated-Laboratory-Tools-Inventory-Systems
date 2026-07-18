@@ -649,7 +649,7 @@ const ScreenCommands = () => {
       <main className="flex-grow flex flex-col items-center justify-center pt-xl px-lg mt-16 relative">
         <div className="w-full max-w-6xl z-10 py-xl">
           <div className="mb-xl text-center">
-            <h2 className="font-headline-lg text-headline-lg text-on-background">Welcome back, {user?.name || 'Student'}</h2>
+            <h2 className="font-headline-lg text-headline-lg text-on-background">Welcome back, {user?.id || 'Student'}</h2>
             <div className="flex items-center justify-center gap-sm mt-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="font-label-md text-label-md text-secondary uppercase tracking-widest">Authenticated & Validated System Access</span>
@@ -1173,38 +1173,141 @@ const ScreenAdmin = () => {
   const [summary, setSummary] = useState(null);
   const [tools, setTools] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [auditTransactions, setAuditTransactions] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedStudentHistory, setSelectedStudentHistory] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentStatus, setStudentStatus] = useState('all');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditStatus, setAuditStatus] = useState('all');
+  const [studentFormMode, setStudentFormMode] = useState('create');
+  const [studentForm, setStudentForm] = useState({ id: '', name: '', pin: '', email: '' });
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const clearAdminState = () => {
+    setSummary(null);
+    setTools([]);
+    setAlerts([]);
+    setStudents([]);
+    setAuditTransactions([]);
+    setSelectedStudent(null);
+    setSelectedStudentHistory([]);
+    setStudentFormMode('create');
+    setStudentForm({ id: '', name: '', pin: '', email: '' });
+    setSuccessMessage('');
+  };
 
   const loadDashboard = async () => {
     if (!token) return;
     setError('');
     try {
-      const [summaryResult, toolsResult, alertsResult] = await Promise.all([api.getAdminSummary(token), api.getTools(token), api.getAlerts(token)]);
+      const [summaryResult, toolsResult, alertsResult] = await Promise.all([
+        api.getAdminSummary(token),
+        api.getTools(token),
+        api.getAlerts(token),
+      ]);
       setSummary(summaryResult);
       setTools(toolsResult.tools || []);
       setAlerts(alertsResult.alerts || []);
     } catch (err) {
       sessionStorage.removeItem('adminSessionToken');
       setToken('');
+      clearAdminState();
+      setError(err.message);
+    }
+  };
+
+  const loadStudents = async () => {
+    if (!token) return;
+    try {
+      const result = await api.getAdminStudents(token, { search: studentSearch, status: studentStatus });
+      setStudents(result.students || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const loadAuditTransactions = async () => {
+    if (!token) return;
+    try {
+      const result = await api.getAuditTransactions(token, { search: auditSearch, status: auditStatus });
+      setAuditTransactions(result.transactions || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const loadStudentHistory = async (studentId) => {
+    if (!token || !studentId) return;
+    try {
+      const result = await api.getAdminStudentHistory(studentId, token);
+      setSelectedStudentHistory(result.transactions || []);
+    } catch (err) {
       setError(err.message);
     }
   };
 
   useEffect(() => {
     if (!token) {
-      setSummary(null);
-      setTools([]);
-      setAlerts([]);
+      clearAdminState();
       return;
     }
     loadDashboard();
   }, [token]);
 
   useEffect(() => {
-    if (!token) return undefined;
-    const refreshInterval = window.setInterval(loadDashboard, 60 * 1000);
-    return () => window.clearInterval(refreshInterval);
-  }, [token]);
+    if (token && activeTab === 'students') {
+      loadStudents();
+    }
+  }, [token, activeTab, studentSearch, studentStatus]);
+
+  useEffect(() => {
+    if (token && activeTab === 'audit') {
+      loadAuditTransactions();
+    }
+  }, [token, activeTab, auditSearch, auditStatus]);
+
+  useEffect(() => {
+    if (!successMessage) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setSuccessMessage(''), 4000);
+    return () => window.clearTimeout(timer);
+  }, [successMessage]);
+
+  const isOverdue = (transaction) => Boolean(transaction?.status === 'overdue' || (!transaction?.returnedAt && new Date(transaction?.dueAt).getTime() < Date.now()));
+
+  const transactions = summary?.activeTransactions || [];
+  const compartments = Array.from({ length: 16 }, (_, index) => {
+    const slot = `C-${String(index + 1).padStart(2, '0')}`;
+    const tool = tools.find((item) => item.slot === slot);
+    return {
+      slot,
+      name: tool?.name || 'Unassigned',
+      occupied: transactions.some((transaction) => transaction.compartmentId === slot),
+    };
+  });
+
+  const formatStatus = (transaction) => {
+    if (transaction.status === 'returned') return 'Returned';
+    const remainingMinutes = Math.round((new Date(transaction.dueAt).getTime() - Date.now()) / (60 * 1000));
+    if (remainingMinutes < 0) return `Overdue (${Math.abs(remainingMinutes)}m)`;
+    if (remainingMinutes < 60) return `Active (${remainingMinutes}m left)`;
+    return `Active (${Math.floor(remainingMinutes / 60)}h left)`;
+  };
+
+  const formatOverdueDuration = (dueAt) => {
+    const minutes = Math.max(1, Math.floor((Date.now() - new Date(dueAt).getTime()) / (60 * 1000)));
+    return minutes >= 60 ? `+${Math.floor(minutes / 60)}h ${minutes % 60}m` : `+${minutes}m`;
+  };
+
+  const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '—');
 
   const handleAdminLogin = async (event) => {
     event.preventDefault();
@@ -1222,30 +1325,79 @@ const ScreenAdmin = () => {
   const handleAdminLogout = () => {
     sessionStorage.removeItem('adminSessionToken');
     setToken('');
+    clearAdminState();
     logout();
     navigate('/');
   };
 
-  const isOverdue = (transaction) => new Date(transaction.dueAt).getTime() < Date.now();
-  const transactions = summary?.activeTransactions || [];
-  const compartments = Array.from({ length: 16 }, (_, index) => {
-    const slot = `C-${String(index + 1).padStart(2, '0')}`;
-    const tool = tools.find((item) => item.slot === slot);
-    return {
-      slot,
-      name: tool?.name || 'Unassigned',
-      occupied: transactions.some((transaction) => transaction.compartmentId === slot),
-    };
-  });
-  const formatStatus = (transaction) => {
-    const remainingMinutes = Math.round((new Date(transaction.dueAt).getTime() - Date.now()) / (60 * 1000));
-    if (remainingMinutes < 0) return `Overdue (${remainingMinutes}m)`;
-    if (remainingMinutes < 60) return `Active (${remainingMinutes}m left)`;
-    return `Active (${Math.floor(remainingMinutes / 60)}h left)`;
+  const handleStudentSubmit = async (event) => {
+    event.preventDefault();
+    setFormError('');
+    setBusy(true);
+    try {
+      if (studentFormMode === 'edit') {
+        const result = await api.updateAdminStudent(studentForm.id, studentForm, token);
+        setSelectedStudent(result.student);
+        setSuccessMessage(`Student details for ${result.student.name} were updated successfully.`);
+      } else {
+        const result = await api.createAdminStudent(studentForm, token);
+        setSuccessMessage(`Student ${result.student.name} was registered successfully.`);
+      }
+      setStudentFormMode('create');
+      setStudentForm({ id: '', name: '', pin: '', email: '' });
+      setFormError('');
+      await loadStudents();
+      if (selectedStudent?.id) {
+        await loadStudentHistory(selectedStudent.id);
+      }
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setBusy(false);
+    }
   };
-  const formatOverdueDuration = (dueAt) => {
-    const minutes = Math.max(1, Math.floor((Date.now() - new Date(dueAt).getTime()) / (60 * 1000)));
-    return minutes >= 60 ? `+${Math.floor(minutes / 60)}h ${minutes % 60}m` : `+${minutes}m`;
+
+  const startEditStudent = (student) => {
+    setStudentFormMode('edit');
+    setStudentForm({
+      id: student.id,
+      name: student.name,
+      pin: student.pin,
+      email: student.email,
+    });
+    setActiveTab('students');
+  };
+
+  const viewStudentHistory = async (student) => {
+    setSelectedStudent(student);
+    await loadStudentHistory(student.id);
+    setActiveTab('students');
+  };
+
+  const resetStudentForm = () => {
+    setStudentFormMode('create');
+    setStudentForm({ id: '', name: '', pin: '', email: '' });
+    setFormError('');
+  };
+
+  const handleExportAudit = async () => {
+    setBusy(true);
+    try {
+      const blob = await api.exportAuditReport(token, { search: auditSearch, status: auditStatus });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `audit-summary-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      setSuccessMessage('Audit export generated successfully and downloaded to your device.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!token) {
@@ -1254,7 +1406,7 @@ const ScreenAdmin = () => {
         <form onSubmit={handleAdminLogin} className="w-full max-w-md bg-white border rounded-xl p-xl shadow-sm space-y-lg">
           <div>
             <h1 className="font-headline-lg text-primary">Admin Dashboard</h1>
-            <p className="text-secondary mt-sm">Enter the administrator access code to view inventory activity.</p>
+            <p className="text-secondary mt-sm">Enter the administrator access code to manage students and export audit records.</p>
           </div>
           <input
             className="w-full border border-outline-variant rounded px-md py-sm"
@@ -1281,17 +1433,26 @@ const ScreenAdmin = () => {
           <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xs">TUP</div>
           <span className="font-headline-md text-headline-md font-bold text-primary">Admin Dashboard</span>
         </div>
-        <div className="flex items-center gap-md">
+        <div className="ml-auto flex items-center gap-md">
           <div className="relative" title={`${alerts.length} overdue tool notification${alerts.length === 1 ? '' : 's'}`}>
             <span className={`material-symbols-outlined ${alerts.length ? 'text-primary' : 'text-secondary'}`}>notifications</span>
             {alerts.length > 0 && <span className="absolute -right-2 -top-2 min-w-4 h-4 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center">{alerts.length}</span>}
           </div>
-          <button onClick={handleAdminLogout} className="px-md py-sm bg-secondary text-white rounded">Exit Admin</button>
+          <button onClick={handleAdminLogout} className="px-md py-sm bg-secondary text-white rounded">Sign Out</button>
         </div>
       </header>
       <main className="pt-24 p-lg grid-dots min-h-screen">
         <div className="max-w-[1440px] mx-auto space-y-lg">
           {error && <p className="text-error font-bold">{error}</p>}
+          {successMessage && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-lg py-md text-emerald-800 shadow-sm flex items-start gap-md">
+              <span className="material-symbols-outlined text-emerald-600">check_circle</span>
+              <div>
+                <div className="font-title-lg text-emerald-900">Success</div>
+                <p className="font-body-md">{successMessage}</p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
             <div className="bg-white border p-lg rounded-xl shadow-sm">
               <p className="text-secondary uppercase text-xs">Total Tools Out</p>
@@ -1302,60 +1463,250 @@ const ScreenAdmin = () => {
               <h3 className="text-4xl font-bold mt-2 text-primary">{summary ? summary.overdueCount : '—'}</h3>
             </div>
             <div className="bg-white border p-lg rounded-xl shadow-sm">
-              <p className="text-secondary uppercase text-xs">System Health</p>
-              <h3 className="text-4xl font-bold mt-2 text-emerald-600">98.4%</h3>
+              <p className="text-secondary uppercase text-xs">Admin Coverage</p>
+              <h3 className="text-4xl font-bold mt-2 text-emerald-600">Students + Audit</h3>
             </div>
           </div>
-          <section className="grid grid-cols-1 lg:grid-cols-12 gap-lg">
-            <div className="lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-              <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
-                <h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined text-primary">grid_view</span>Storage Compartments Overview</h4>
-                <div className="flex items-center gap-md text-label-md font-label-md"><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-emerald-500 rounded-full" />Available</span><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-slate-400 rounded-full" />Occupied</span></div>
-              </div>
-              <div className="p-lg grid grid-cols-2 sm:grid-cols-4 gap-md">
-                {compartments.map((compartment) => <div key={compartment.slot} className={`relative group border p-md rounded-lg transition-all hover:shadow-md ${compartment.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'}`}><div className="flex justify-between items-start mb-sm"><span className={`font-mono-data font-bold ${compartment.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{compartment.slot}</span><span className={`material-symbols-outlined text-[18px] ${compartment.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{compartment.occupied ? 'lock' : 'check_circle'}</span></div><p className="font-label-md truncate text-on-surface">{compartment.name}</p></div>)}
-              </div>
+
+          <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+            <div className="flex flex-wrap gap-sm border-b bg-slate-50 p-md">
+              {[
+                ['overview', 'Overview'],
+                ['students', 'Students'],
+                ['audit', 'Audit Export'],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={`px-md py-sm rounded-full text-sm font-bold transition-colors ${activeTab === key ? 'bg-primary text-white' : 'bg-white border border-outline-variant text-secondary'}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <aside className="lg:col-span-4 flex flex-col gap-lg">
-              <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm flex-1">
-                <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-primary text-white"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined">warning</span>Overdue Alerts</h4><span className="px-sm py-xs bg-white/20 rounded font-label-md">{alerts.length} Alerts</span></div>
-                <div className="p-md space-y-sm">{alerts.length ? alerts.map((item) => <div key={item.id} className="p-md bg-error-container/20 border-l-4 border-primary rounded-r-lg space-y-xs"><div className="flex justify-between items-start"><span className="font-body-md font-bold text-primary">{item.studentId}</span><span className="font-label-md text-primary font-bold">{formatOverdueDuration(item.dueAt)}</span></div><p className="text-body-md text-secondary">{item.toolName}</p><div className="flex justify-between items-center mt-sm"><span className="text-[11px] uppercase tracking-tighter text-secondary">Due: {new Date(item.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><button onClick={() => window.alert(`Overdue tool notification\nStudent: ${item.studentId}\nTool: ${item.toolName}`)} className="text-primary font-bold text-[12px] underline">Notify Student</button></div></div>) : <p className="p-md text-secondary text-body-md">No overdue tools. Great work!</p>}</div>
+
+            {activeTab === 'overview' && (
+              <div className="p-lg space-y-lg">
+                <section className="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+                  <div className="lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+                    <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+                      <h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined text-primary">grid_view</span>Storage Compartments Overview</h4>
+                      <div className="flex items-center gap-md text-label-md font-label-md"><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-emerald-500 rounded-full" />Available</span><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-slate-400 rounded-full" />Occupied</span></div>
+                    </div>
+                    <div className="p-lg grid grid-cols-2 sm:grid-cols-4 gap-md">
+                      {compartments.map((compartment) => <div key={compartment.slot} className={`relative group border p-md rounded-lg transition-all hover:shadow-md ${compartment.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'}`}><div className="flex justify-between items-start mb-sm"><span className={`font-mono-data font-bold ${compartment.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{compartment.slot}</span><span className={`material-symbols-outlined text-[18px] ${compartment.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{compartment.occupied ? 'lock' : 'check_circle'}</span></div><p className="font-label-md truncate text-on-surface">{compartment.name}</p></div>)}
+                    </div>
+                  </div>
+                  <aside className="lg:col-span-4 flex flex-col gap-lg">
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm flex-1">
+                      <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-primary text-white"><h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined">warning</span>Overdue Alerts</h4><span className="px-sm py-xs bg-white/20 rounded font-label-md">{alerts.length} Alerts</span></div>
+                      <div className="p-md space-y-sm">{alerts.length ? alerts.map((item) => <div key={item.id} className="p-md bg-error-container/20 border-l-4 border-primary rounded-r-lg space-y-xs"><div className="flex justify-between items-start"><span className="font-body-md font-bold text-primary">{item.studentId}</span><span className="font-label-md text-primary font-bold">{formatOverdueDuration(item.dueAt)}</span></div><p className="text-body-md text-secondary">{item.toolName}</p><div className="flex justify-between items-center mt-sm"><span className="text-[11px] uppercase tracking-tighter text-secondary">Due: {new Date(item.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div></div>) : <p className="p-md text-secondary text-body-md">No overdue tools. Great work!</p>}</div>
+                    </div>
+                  </aside>
+                </section>
+                <section className="bg-white border rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-lg py-md border-b bg-slate-800 text-white flex justify-between items-center">
+                    <h4 className="font-bold uppercase tracking-wide">Active Tool Transactions</h4>
+                    <button onClick={loadDashboard} className="font-label-md uppercase text-secondary/80">Refresh</button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-100 uppercase text-xs text-slate-600">
+                        <tr>
+                          <th className="p-4">Student ID</th>
+                          <th className="p-4">Tool</th>
+                          <th className="p-4">Compartment</th>
+                          <th className="p-4">Time Borrowed</th>
+                          <th className="p-4">Time Remaining</th>
+                          <th className="p-4">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y text-sm">
+                        {transactions.map((item) => (
+                          <tr key={`active-${item.id}`}>
+                            <td className={`p-4 font-bold ${isOverdue(item) ? 'text-primary' : ''}`}>{item.studentId}</td>
+                            <td className="p-4">{item.toolName}</td>
+                            <td className="p-4">{item.compartmentId}</td>
+                            <td className="p-4">{formatDateTime(item.borrowedAt)}</td>
+                            <td className={`p-4 ${isOverdue(item) ? 'text-primary' : 'text-emerald-600'}`}>{formatStatus(item)}</td>
+                            <td className="p-4">{item.status || 'active'}</td>
+                          </tr>
+                        ))}
+                        {!transactions.length && <tr><td colSpan="6" className="p-4 text-center text-secondary">No active tool transactions.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </div>
-            </aside>
-          </section>
-          <section className="bg-white border rounded-xl overflow-hidden shadow-sm">
-            <div className="px-lg py-md border-b bg-slate-800 text-white flex justify-between items-center">
-              <h4 className="font-bold uppercase tracking-wide">Active Tool Transactions</h4>
-              <button onClick={loadDashboard} className="font-label-md uppercase text-secondary/80">Refresh</button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-100 uppercase text-xs text-slate-600">
-                  <tr>
-                    <th className="p-4">Student ID</th>
-                    <th className="p-4">Tool</th>
-                    <th className="p-4">Compartment</th>
-                    <th className="p-4">Time Borrowed</th>
-                    <th className="p-4">Time Remaining</th>
-                    <th className="p-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y text-sm">
-                  {transactions.map((item) => (
-                    <tr key={`active-${item.id}`}>
-                      <td className={`p-4 font-bold ${isOverdue(item) ? 'text-primary' : ''}`}>{item.studentId}</td>
-                      <td className="p-4">{item.toolName}</td>
-                      <td className="p-4">{item.compartmentId}</td>
-                      <td className="p-4">{new Date(item.borrowedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                      <td className={`p-4 ${isOverdue(item) ? 'text-primary' : 'text-emerald-600'}`}>{formatStatus(item)}</td>
-                      <td className="p-4"><button onClick={() => window.alert(`Transaction ${item.id}\nTool: ${item.toolName}\nDue: ${new Date(item.dueAt).toLocaleString()}`)} className="text-primary font-bold">{isOverdue(item) ? 'Notify' : 'Details'}</button></td>
-                    </tr>
-                  ))}
-                  {!transactions.length && <tr><td colSpan="6" className="p-4 text-center text-secondary">No active tool transactions.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </section>
+            )}
+
+            {activeTab === 'students' && (
+              <div className="p-lg space-y-lg">
+                <section className="grid grid-cols-1 xl:grid-cols-12 gap-lg">
+                  <div className="xl:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm space-y-md">
+                    <div className="flex items-center justify-between gap-md">
+                      <h4 className="font-title-lg text-on-background">{studentFormMode === 'edit' ? 'Edit Student' : 'Register Student'}</h4>
+                      <button type="button" onClick={resetStudentForm} className="text-sm text-primary font-bold">Reset</button>
+                    </div>
+                    <form onSubmit={handleStudentSubmit} className="space-y-md">
+                      <input className="w-full border border-outline-variant rounded px-md py-sm" placeholder="Student ID" value={studentForm.id} disabled={studentFormMode === 'edit'} onChange={(event) => setStudentForm({ ...studentForm, id: event.target.value })} />
+                      <input className="w-full border border-outline-variant rounded px-md py-sm" placeholder="Full name" value={studentForm.name} onChange={(event) => setStudentForm({ ...studentForm, name: event.target.value })} />
+                      <input className="w-full border border-outline-variant rounded px-md py-sm" placeholder="PIN" value={studentForm.pin} onChange={(event) => setStudentForm({ ...studentForm, pin: event.target.value })} />
+                      <input className="w-full border border-outline-variant rounded px-md py-sm" placeholder="Email" value={studentForm.email} onChange={(event) => setStudentForm({ ...studentForm, email: event.target.value })} />
+                      {formError && <p className="text-error font-bold">{formError}</p>}
+                      <button type="submit" disabled={busy} className="w-full bg-primary text-white rounded px-md py-sm font-bold disabled:opacity-60">{busy ? 'Saving...' : studentFormMode === 'edit' ? 'Update Student' : 'Add Student'}</button>
+                    </form>
+                  </div>
+                  <div className="xl:col-span-8 space-y-lg">
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm flex flex-col gap-md">
+                      <div className="flex flex-wrap gap-md items-center justify-between">
+                        <div className="flex flex-wrap gap-md items-center">
+                          <input className="border border-outline-variant rounded px-md py-sm min-w-[260px]" placeholder="Search students by ID, name, or email" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} />
+                          <select className="border border-outline-variant rounded px-md py-sm" value={studentStatus} onChange={(event) => setStudentStatus(event.target.value)}>
+                            <option value="all">All students</option>
+                            <option value="active">With active borrowings</option>
+                            <option value="overdue">With overdue borrowings</option>
+                            <option value="inactive">No active borrowings</option>
+                          </select>
+                        </div>
+                        <button onClick={loadStudents} className="px-md py-sm rounded bg-secondary text-white font-bold">Refresh</button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-100 uppercase text-xs text-slate-600">
+                            <tr>
+                              <th className="p-4">Student</th>
+                              <th className="p-4">Email</th>
+                              <th className="p-4">Active</th>
+                              <th className="p-4">Overdue</th>
+                              <th className="p-4">Last Borrowed</th>
+                              <th className="p-4">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {students.map((student) => (
+                              <tr key={student.id} className={selectedStudent?.id === student.id ? 'bg-primary/5' : ''}>
+                                <td className="p-4">
+                                  <div className="font-bold text-on-surface">{student.name}</div>
+                                  <div className="text-secondary font-mono-data">{student.id}</div>
+                                </td>
+                                <td className="p-4 text-secondary">{student.email}</td>
+                                <td className="p-4">{student.activeBorrowCount || 0}</td>
+                                <td className={`p-4 ${student.overdueBorrowCount ? 'text-primary font-bold' : ''}`}>{student.overdueBorrowCount || 0}</td>
+                                <td className="p-4 text-secondary">{formatDateTime(student.lastBorrowedAt)}</td>
+                                <td className="p-4 space-x-3">
+                                  <button onClick={() => viewStudentHistory(student)} className="text-primary font-bold">View History</button>
+                                  <button onClick={() => startEditStudent(student)} className="text-secondary font-bold">Edit</button>
+                                </td>
+                              </tr>
+                            ))}
+                            {!students.length && <tr><td colSpan="6" className="p-4 text-center text-secondary">No students found.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm space-y-md">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-title-lg text-on-background">Student Borrowing History</h4>
+                        {selectedStudent && <span className="text-sm text-secondary">{selectedStudent.name}</span>}
+                      </div>
+                      {selectedStudent ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-100 uppercase text-xs text-slate-600">
+                              <tr>
+                                <th className="p-4">Tool</th>
+                                <th className="p-4">Borrowed</th>
+                                <th className="p-4">Due</th>
+                                <th className="p-4">Returned</th>
+                                <th className="p-4">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {selectedStudentHistory.map((transaction) => (
+                                <tr key={transaction.id}>
+                                  <td className="p-4">
+                                    <div className="font-bold text-on-surface">{transaction.toolName}</div>
+                                    <div className="text-secondary font-mono-data">{transaction.compartmentId}</div>
+                                  </td>
+                                  <td className="p-4 text-secondary">{formatDateTime(transaction.borrowedAt)}</td>
+                                  <td className={`p-4 ${transaction.status === 'overdue' ? 'text-primary font-bold' : 'text-secondary'}`}>{formatDateTime(transaction.dueAt)}</td>
+                                  <td className="p-4 text-secondary">{transaction.returnedAt ? formatDateTime(transaction.returnedAt) : 'Not yet returned'}</td>
+                                  <td className="p-4">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${transaction.status === 'returned' ? 'bg-emerald-100 text-emerald-700' : transaction.status === 'overdue' ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800'}`}>
+                                      {transaction.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                              {!selectedStudentHistory.length && <tr><td colSpan="5" className="p-4 text-center text-secondary">No borrowing history available.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-secondary">Select a student to inspect their borrowing history.</p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {activeTab === 'audit' && (
+              <div className="p-lg space-y-lg">
+                <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm space-y-md">
+                  <div className="flex flex-wrap gap-md items-center justify-between">
+                    <div className="flex flex-wrap gap-md items-center">
+                      <input className="border border-outline-variant rounded px-md py-sm min-w-[260px]" placeholder="Search by student, tool, or transaction" value={auditSearch} onChange={(event) => setAuditSearch(event.target.value)} />
+                      <select className="border border-outline-variant rounded px-md py-sm" value={auditStatus} onChange={(event) => setAuditStatus(event.target.value)}>
+                        <option value="all">All records</option>
+                        <option value="active">Active only</option>
+                        <option value="returned">Returned only</option>
+                        <option value="overdue">Overdue only</option>
+                      </select>
+                    </div>
+                    <button onClick={handleExportAudit} disabled={busy} className="px-md py-sm rounded bg-primary text-white font-bold disabled:opacity-60">{busy ? 'Preparing export...' : 'Export CSV'}</button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-100 uppercase text-xs text-slate-600">
+                        <tr>
+                          <th className="p-4">Transaction</th>
+                          <th className="p-4">Student</th>
+                          <th className="p-4">Tool</th>
+                          <th className="p-4">Borrowed</th>
+                          <th className="p-4">Due</th>
+                          <th className="p-4">Returned</th>
+                          <th className="p-4">Flag</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {auditTransactions.map((transaction) => (
+                          <tr key={transaction.id}>
+                            <td className="p-4 font-mono-data text-secondary">{transaction.id}</td>
+                            <td className="p-4">
+                              <div className="font-bold">{transaction.studentName}</div>
+                              <div className="text-secondary">{transaction.studentId}</div>
+                            </td>
+                            <td className="p-4">{transaction.toolName}</td>
+                            <td className="p-4 text-secondary">{formatDateTime(transaction.borrowedAt)}</td>
+                            <td className={`p-4 ${transaction.status === 'overdue' ? 'text-primary font-bold' : 'text-secondary'}`}>{formatDateTime(transaction.dueAt)}</td>
+                            <td className="p-4 text-secondary">{transaction.returnedAt ? formatDateTime(transaction.returnedAt) : 'Not yet returned'}</td>
+                            <td className="p-4">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${transaction.status === 'returned' ? 'bg-emerald-100 text-emerald-700' : transaction.status === 'overdue' ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800'}`}>
+                                {transaction.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {!auditTransactions.length && <tr><td colSpan="7" className="p-4 text-center text-secondary">No audit records found.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

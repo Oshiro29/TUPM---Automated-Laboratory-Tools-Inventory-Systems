@@ -22,6 +22,23 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function download(path, options = {}) {
+  const { token } = options;
+  const headers = {};
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${apiBase}${path}`, { headers });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || `API error ${response.status}`);
+  }
+
+  return response.blob();
+}
+
 export const api = {
   login(studentId, pin) {
     return request('/auth/login', { method: 'POST', body: { studentId, pin } });
@@ -49,6 +66,36 @@ export const api = {
   },
   getAdminSummary(token) {
     return request('/admin/summary', { token });
+  },
+  getAdminStudents(token, params = {}) {
+    const searchParams = new URLSearchParams();
+    if (params.search) searchParams.set('search', params.search);
+    if (params.status) searchParams.set('status', params.status);
+    const query = searchParams.toString();
+    return request(`/admin/students${query ? `?${query}` : ''}`, { token });
+  },
+  createAdminStudent(student, token) {
+    return request('/admin/students', { method: 'POST', body: student, token });
+  },
+  updateAdminStudent(studentId, student, token) {
+    return request(`/admin/students/${encodeURIComponent(studentId)}`, { method: 'PUT', body: student, token });
+  },
+  getAdminStudentHistory(studentId, token) {
+    return request(`/admin/students/${encodeURIComponent(studentId)}/history`, { token });
+  },
+  getAuditTransactions(token, params = {}) {
+    const searchParams = new URLSearchParams();
+    if (params.search) searchParams.set('search', params.search);
+    if (params.status) searchParams.set('status', params.status);
+    const query = searchParams.toString();
+    return request(`/admin/audit${query ? `?${query}` : ''}`, { token });
+  },
+  exportAuditReport(token, params = {}) {
+    const searchParams = new URLSearchParams();
+    if (params.search) searchParams.set('search', params.search);
+    if (params.status) searchParams.set('status', params.status);
+    const query = searchParams.toString();
+    return download(`/admin/export${query ? `?${query}` : ''}`, { token });
   },
   getAlerts(token) {
     return request('/alerts', { token });

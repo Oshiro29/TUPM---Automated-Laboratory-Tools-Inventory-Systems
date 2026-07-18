@@ -9,6 +9,20 @@ const adminToken = process.env.ADMIN_ACCESS_TOKEN || 'ADMIN-TUPM-ACCESS';
 const borrowDurationMs = 3 * 60 * 60 * 1000;
 const sessionTokens = new Map();
 
+function toCsvValue(value) {
+  if (value === null || value === undefined) return '';
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function toCsv(headers, rows) {
+  const lines = [headers.join(',')];
+  for (const row of rows) {
+    lines.push(headers.map((header) => toCsvValue(row[header])).join(','));
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 function buildStudentPayload(student) {
   return { id: student.id, name: student.name, email: student.email };
 }
@@ -121,6 +135,97 @@ async function createApp() {
   app.get('/api/admin/summary', authMiddleware, async (req, res) => {
     if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
     return res.json(await repository.getAdminSummary(Date.now()));
+  });
+
+  app.get('/api/admin/students', authMiddleware, async (req, res) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    const { search = '', status = 'all' } = req.query;
+    return res.json({ students: await repository.listStudents({ search, status }, Date.now()) });
+  });
+
+  app.post('/api/admin/students', authMiddleware, async (req, res, next) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    try {
+      const { id, name, pin, email } = req.body;
+      if (!id || !name || !pin || !email) {
+        return res.status(400).json({ message: 'Student ID, name, PIN, and email are required.' });
+      }
+      const student = await repository.createStudent({ id: id.trim(), name: name.trim(), pin: pin.trim(), email: email.trim() });
+      return res.status(201).json({ student });
+    } catch (error) {
+      if (error && error.code === 'SQLITE_CONSTRAINT') {
+        return res.status(409).json({ message: 'Student ID or email already exists.' });
+      }
+      return next(error);
+    }
+  });
+
+  app.put('/api/admin/students/:studentId', authMiddleware, async (req, res, next) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    try {
+      const { studentId } = req.params;
+      const { name, pin, email } = req.body;
+      if (!name || !pin || !email) {
+        return res.status(400).json({ message: 'Name, PIN, and email are required.' });
+      }
+      const student = await repository.updateStudent(studentId.trim(), { name: name.trim(), pin: pin.trim(), email: email.trim() });
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found.' });
+      }
+      return res.json({ student });
+    } catch (error) {
+      if (error && error.code === 'SQLITE_CONSTRAINT') {
+        return res.status(409).json({ message: 'Email already exists.' });
+      }
+      return next(error);
+    }
+  });
+
+  app.get('/api/admin/students/:studentId/history', authMiddleware, async (req, res) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    const { studentId } = req.params;
+    return res.json({ transactions: await repository.getStudentHistory(studentId.trim(), Date.now()) });
+  });
+
+  app.get('/api/admin/audit', authMiddleware, async (req, res) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    const { search = '', status = 'all' } = req.query;
+    return res.json({ transactions: await repository.listAuditTransactions({ search, status }, Date.now()) });
+  });
+
+  app.get('/api/admin/export', authMiddleware, async (req, res) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    const { search = '', status = 'all' } = req.query;
+    const transactions = await repository.listAuditTransactions({ search, status }, Date.now());
+    const rows = transactions.map((transaction) => ({
+      id: transaction.id,
+      studentId: transaction.studentId,
+      studentName: transaction.studentName,
+      toolName: transaction.toolName,
+      compartmentId: transaction.compartmentId,
+      borrowedAt: new Date(transaction.borrowedAt).toISOString(),
+      dueAt: new Date(transaction.dueAt).toISOString(),
+      returnedAt: transaction.returnedAt ? new Date(transaction.returnedAt).toISOString() : '',
+      returnCompartmentId: transaction.returnCompartmentId || '',
+      status: transaction.status,
+      isOverdue: transaction.isOverdue ? 'YES' : 'NO',
+    }));
+    const csv = toCsv([
+      'id',
+      'studentId',
+      'studentName',
+      'toolName',
+      'compartmentId',
+      'borrowedAt',
+      'dueAt',
+      'returnedAt',
+      'returnCompartmentId',
+      'status',
+      'isOverdue',
+    ], rows);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-summary-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return res.send(csv);
   });
 
   app.get('/api/alerts', authMiddleware, async (req, res) => {
