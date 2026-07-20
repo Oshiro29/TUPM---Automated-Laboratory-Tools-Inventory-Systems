@@ -147,6 +147,13 @@ function createInventoryRepository(db) {
       });
     },
 
+    async deleteStudent(studentId) {
+      return serializeWrite(async () => {
+        const result = await db.run('DELETE FROM students WHERE id = ?', [studentId]);
+        return result.changes > 0 ? { deleted: true } : null;
+      });
+    },
+
     async getStudentHistory(studentId, now = Date.now()) {
       await syncOverdueAlerts(now);
       const rows = await db.all(`${transactionSelect} WHERE tx.student_id = ? ORDER BY tx.borrowed_at DESC`, [studentId]);
@@ -210,11 +217,13 @@ function createInventoryRepository(db) {
           }
 
           const borrowedAt = Date.now();
+          const toolDetails = await db.get('SELECT slot FROM tools WHERE id = ?', [toolId]);
+          const assignedCompartmentId = toolDetails?.slot || compartmentId;
           const id = `tx-${randomUUID()}`;
           await db.run(`INSERT INTO transactions
             (id, student_id, tool_id, compartment_id, borrowed_at, due_at, returned_at, return_compartment_id)
             VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
-          [id, student.id, toolId, compartmentId, borrowedAt, dueAt]);
+          [id, student.id, toolId, assignedCompartmentId, borrowedAt, dueAt]);
           const row = await db.get(`${transactionSelect} WHERE tx.id = ?`, [id]);
           await db.exec('COMMIT');
           return { transaction: mapTransaction(row) };
@@ -240,7 +249,8 @@ function createInventoryRepository(db) {
           }
 
           const wasOverdue = returnedAt > row.due_at;
-          await db.run('UPDATE transactions SET returned_at = ?, return_compartment_id = ? WHERE id = ?', [returnedAt, compartmentId, transactionId]);
+          const returnCompartmentId = compartmentId || row.compartment_id;
+          await db.run('UPDATE transactions SET returned_at = ?, return_compartment_id = ? WHERE id = ?', [returnedAt, returnCompartmentId, transactionId]);
           await db.run('UPDATE tools SET available_qty = available_qty + 1 WHERE id = ?', [row.tool_id]);
           await db.run(`UPDATE alerts SET resolved_at = ?
             WHERE transaction_id = ? AND alert_type = 'OVERDUE' AND resolved_at IS NULL`,

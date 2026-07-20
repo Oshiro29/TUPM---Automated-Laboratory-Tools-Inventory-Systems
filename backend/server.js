@@ -181,6 +181,23 @@ async function createApp() {
     }
   });
 
+  app.delete('/api/admin/students/:studentId', authMiddleware, async (req, res, next) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    try {
+      const { studentId } = req.params;
+      const result = await repository.deleteStudent(studentId.trim());
+      if (!result) {
+        return res.status(404).json({ message: 'Student not found.' });
+      }
+      return res.json({ deleted: true });
+    } catch (error) {
+      if (error && error.code === 'SQLITE_CONSTRAINT') {
+        return res.status(409).json({ message: 'Cannot delete a student with existing transactions.' });
+      }
+      return next(error);
+    }
+  });
+
   app.get('/api/admin/students/:studentId/history', authMiddleware, async (req, res) => {
     if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
     const { studentId } = req.params;

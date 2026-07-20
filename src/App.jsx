@@ -19,7 +19,6 @@ const toolVisuals = {
   'tool-4': { icon: 'handyman', image: pliersImage },
 };
 const getToolVisual = (toolId) => toolVisuals[toolId] || { icon: 'precision_manufacturing', image: '' };
-const hardwareCompartmentId = 'C03';
 
 function QrScannerOverlay({ open, onClose, onScan, onFallback, error, setError }) {
   const videoRef = useRef(null);
@@ -291,6 +290,33 @@ function TransactionSuccessModal({ open, title, message, details = [], actionLab
           <button onClick={onClose} className="w-full py-md bg-primary text-on-primary font-label-md uppercase tracking-wider rounded-lg hover:bg-primary-container transition-colors">
             {actionLabel}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmationModal({ open, title, message, confirmLabel = 'Confirm', onConfirm, onCancel, busy }) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[85] bg-on-background/75 backdrop-blur-lg flex items-center justify-center px-md py-lg">
+      <div className="w-full max-w-xl bg-surface-container-lowest border border-outline-variant shadow-2xl rounded-xl overflow-hidden">
+        <div className="px-lg py-md bg-surface-container-low border-b border-outline-variant">
+          <h3 className="font-title-lg text-on-background">{title}</h3>
+          <p className="font-body-md text-secondary mt-xs">{message}</p>
+        </div>
+        <div className="p-lg space-y-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-md">
+            <button onClick={onCancel} className="w-full py-md bg-surface-container-high text-secondary border border-outline rounded-lg font-bold hover:bg-surface-container transition-colors">
+              Cancel
+            </button>
+            <button onClick={onConfirm} disabled={busy} className="w-full py-md bg-error text-white rounded-lg font-bold disabled:opacity-60 hover:bg-error-container transition-colors">
+              {busy ? 'Deleting...' : confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -868,18 +894,19 @@ const ScreenToolRelease = () => {
       return;
     }
 
+    const compartmentId = selectedTool.slot || 'Unassigned';
     setBusy(true);
     setError('');
 
     try {
-      await api.borrow(selectedTool.id, hardwareCompartmentId, token);
-      await api.openCompartment(hardwareCompartmentId, token);
+      await api.borrow(selectedTool.id, compartmentId, token);
+      await api.openCompartment(compartmentId, token);
       setSuccessPayload({
         title: 'Borrow Successful',
-        message: `Borrow confirmed. ${selectedTool.name} has been assigned and the locker opened at ${hardwareCompartmentId}.`,
+        message: `Borrow confirmed. ${selectedTool.name} has been assigned and the locker opened at ${compartmentId}.`,
         details: [
           { label: 'Tool', value: selectedTool.name },
-          { label: 'Compartment', value: hardwareCompartmentId },
+          { label: 'Compartment', value: compartmentId },
         ],
       });
       setSuccessOpen(true);
@@ -973,7 +1000,7 @@ const ScreenToolRelease = () => {
 
 const ScreenReturnConfirm = () => {
   const navigate = useNavigate();
-  const { token, setError } = useSession();
+  const { token, setError, logout } = useSession();
   const [transaction, setTransaction] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -991,9 +1018,10 @@ const ScreenReturnConfirm = () => {
     if (!transaction) {
       return;
     }
+    const compartmentId = transaction.compartmentId || transaction.returnCompartmentId || 'Unassigned';
     setError('');
     try {
-      await api.openCompartment(hardwareCompartmentId, token);
+      await api.openCompartment(compartmentId, token);
       navigate('/return-action');
     } catch (err) {
       setError(err.message);
@@ -1046,7 +1074,7 @@ const ScreenReturnConfirm = () => {
                   <span className="material-symbols-outlined text-4xl">meeting_room</span>
                   <div className="text-left">
                     <span className="font-headline-md block">OPEN COMPARTMENT</span>
-                    <span className="font-label-md uppercase opacity-80">{hardwareCompartmentId} will unlock immediately</span>
+                    <span className="font-label-md uppercase opacity-80">{transaction?.compartmentId || transaction?.returnCompartmentId || 'Assigned compartment'} will unlock immediately</span>
                   </div>
                 </button>
                 <button onClick={() => navigate('/commands')} className="bg-surface-container-high text-secondary h-14 flex items-center justify-center gap-sm">
@@ -1056,7 +1084,16 @@ const ScreenReturnConfirm = () => {
               </div>
             </>
           ) : (
-            <div className="col-span-12 p-lg bg-white border rounded-xl text-center">No active borrow transaction found for your account.</div>
+            <div className="col-span-12 p-lg bg-white border rounded-xl text-center space-y-md">
+              <p>No active borrow transaction found for your account.</p>
+              <div className="flex flex-wrap justify-center gap-sm">
+                <button onClick={() => navigate('/commands')} className="px-md py-sm rounded bg-surface-container-high text-secondary font-bold">Back to Home</button>
+                <button onClick={() => {
+                  logout();
+                  navigate('/');
+                }} className="px-md py-sm rounded bg-primary text-white font-bold">Sign Out</button>
+              </div>
+            </div>
           )}
         </div>
       </main>
@@ -1066,7 +1103,7 @@ const ScreenReturnConfirm = () => {
 
 const ScreenReturnAction = () => {
   const navigate = useNavigate();
-  const { token, setError, setMessage } = useSession();
+  const { token, setError, setMessage, logout } = useSession();
   const [transaction, setTransaction] = useState(null);
   const [busy, setBusy] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
@@ -1086,18 +1123,19 @@ const ScreenReturnAction = () => {
       return;
     }
 
+    const compartmentId = transaction.compartmentId || transaction.returnCompartmentId || 'Unassigned';
     setBusy(true);
     setError('');
 
     try {
-      await api.openCompartment(hardwareCompartmentId, token);
-      await api.returnTransaction(transaction.id, hardwareCompartmentId, token);
+      await api.openCompartment(compartmentId, token);
+      await api.returnTransaction(transaction.id, compartmentId, token);
       setSuccessPayload({
         title: 'Return Successful',
         message: 'Return completed. Thank you for using the lab inventory kiosk.',
         details: [
           { label: 'Transaction', value: transaction.id },
-          { label: 'Compartment', value: hardwareCompartmentId },
+          { label: 'Compartment', value: compartmentId },
         ],
       });
       setSuccessOpen(true);
@@ -1113,20 +1151,43 @@ const ScreenReturnAction = () => {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="flex-grow pt-24 pb-lg px-xl flex gap-lg container-max mx-auto w-full">
+        {!transaction ? (
+          <section className="w-full flex items-center justify-center">
+            <div className="bg-white p-lg rounded-xl text-center space-y-md max-w-md w-full">
+              <h2 className="font-title-lg">No active transaction to return</h2>
+              <p className="text-secondary">There is no borrowed tool to finish returning right now.</p>
+              <div className="flex flex-wrap justify-center gap-sm">
+                <button onClick={() => navigate('/commands')} className="px-md py-sm rounded bg-surface-container-high text-secondary font-bold">Back to Home</button>
+                <button onClick={() => {
+                  logout();
+                  navigate('/');
+                }} className="px-md py-sm rounded bg-primary text-white font-bold">Sign Out</button>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <>
         <section className="w-1/2">
           <div className="bg-white p-lg rounded-xl h-full flex flex-col">
             <h2 className="font-title-lg mb-lg">Locker Status</h2>
             <div className="grid grid-cols-4 gap-2 flex-grow">
               <div className="col-span-4 h-16 border rounded flex items-center justify-between px-md unlocked-highlight">
-                <span className="font-mono-data font-bold">{hardwareCompartmentId}</span>
+                <span className="font-mono-data font-bold">{transaction?.compartmentId || transaction?.returnCompartmentId || 'Assigned compartment'}</span>
                 <span className="text-primary font-bold">UNLOCKED</span>
                 <span className="material-symbols-outlined text-primary">lock_open</span>
               </div>
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className={`h-24 border rounded flex flex-col items-center justify-center ${i === 2 ? 'unlocked-highlight' : 'opacity-20'}`}>
-                  <span className="font-mono-data">C-0{i + 1}</span>
-                </div>
-              ))}
+              {(() => {
+                const activeSlot = transaction?.compartmentId || transaction?.returnCompartmentId;
+                return [...Array(8)].map((_, i) => {
+                  const slot = `C-${String(i + 1).padStart(2, '0')}`;
+                  const isActive = slot === activeSlot;
+                  return (
+                    <div key={slot} className={`h-24 border rounded flex flex-col items-center justify-center ${isActive ? 'unlocked-highlight' : 'opacity-20'}`}>
+                      <span className="font-mono-data">{slot}</span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         </section>
@@ -1137,7 +1198,7 @@ const ScreenReturnAction = () => {
           <div className="flex flex-col gap-md">
             <div className="p-md bg-white border rounded-xl flex gap-md">
               <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">1</div>
-              <p>Place tool back into compartment {hardwareCompartmentId}.</p>
+              <p>Place tool back into compartment {transaction?.compartmentId || transaction?.returnCompartmentId || 'the assigned compartment'}.</p>
             </div>
             <div className="p-md bg-white border rounded-xl flex gap-md">
               <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">2</div>
@@ -1148,6 +1209,8 @@ const ScreenReturnAction = () => {
             {busy ? 'Completing return...' : 'Finish Return'}
           </button>
         </section>
+        </>
+        )}
       </main>
       <TransactionSuccessModal
         open={successOpen}
@@ -1188,6 +1251,8 @@ const ScreenAdmin = () => {
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTargetStudent, setDeleteTargetStudent] = useState(null);
 
   const clearAdminState = () => {
     setSummary(null);
@@ -1350,6 +1415,37 @@ const ScreenAdmin = () => {
       if (selectedStudent?.id) {
         await loadStudentHistory(selectedStudent.id);
       }
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteStudent = (studentId) => {
+    setDeleteTargetStudent(studentId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteStudent = async () => {
+    if (!deleteTargetStudent) {
+      return;
+    }
+
+    setBusy(true);
+    setFormError('');
+    try {
+      const result = await api.deleteAdminStudent(deleteTargetStudent, token);
+      if (result?.deleted) {
+        setSuccessMessage(`Student ${deleteTargetStudent} was deleted successfully.`);
+      } else {
+        setSuccessMessage(`Student ${deleteTargetStudent} was removed.`);
+      }
+      setSelectedStudent(null);
+      setSelectedStudentHistory([]);
+      setDeleteTargetStudent(null);
+      setDeleteDialogOpen(false);
+      await loadStudents();
     } catch (err) {
       setFormError(err.message);
     } finally {
@@ -1597,6 +1693,7 @@ const ScreenAdmin = () => {
                                 <td className="p-4 space-x-3">
                                   <button onClick={() => viewStudentHistory(student)} className="text-primary font-bold">View History</button>
                                   <button onClick={() => startEditStudent(student)} className="text-secondary font-bold">Edit</button>
+                                  <button onClick={() => handleDeleteStudent(student.id)} className="text-error font-bold">Delete</button>
                                 </td>
                               </tr>
                             ))}
@@ -1708,6 +1805,18 @@ const ScreenAdmin = () => {
             )}
           </div>
         </div>
+      <ConfirmationModal
+        open={deleteDialogOpen}
+        title="Delete Student"
+        message={`Are you sure you want to permanently delete student ${deleteTargetStudent}? This action cannot be undone.`}
+        confirmLabel="Delete Student"
+        onConfirm={confirmDeleteStudent}
+        onCancel={() => {
+          setDeleteDialogOpen(false);
+          setDeleteTargetStudent(null);
+        }}
+        busy={busy}
+      />
       </main>
     </div>
   );

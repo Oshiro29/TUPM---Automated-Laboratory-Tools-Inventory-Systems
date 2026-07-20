@@ -80,6 +80,9 @@ export const api = {
   updateAdminStudent(studentId, student, token) {
     return request(`/admin/students/${encodeURIComponent(studentId)}`, { method: 'PUT', body: student, token });
   },
+  deleteAdminStudent(studentId, token) {
+    return request(`/admin/students/${encodeURIComponent(studentId)}`, { method: 'DELETE', token });
+  },
   getAdminStudentHistory(studentId, token) {
     return request(`/admin/students/${encodeURIComponent(studentId)}/history`, { token });
   },
