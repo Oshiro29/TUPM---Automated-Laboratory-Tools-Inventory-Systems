@@ -1,5 +1,5 @@
   import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { api } from './api';
 import calculatorImage from './assets/calculator.jpg';
@@ -460,6 +460,12 @@ const ScreenWelcome = () => {
   const [pendingStudent, setPendingStudent] = useState(null);
   const [pendingPin, setPendingPin] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -568,9 +574,9 @@ const ScreenWelcome = () => {
             <p className="font-label-md text-label-md text-secondary tracking-widest uppercase">Automated Lab Tools System</p>
           </div>
         </div>
-        <div className="text-right">
-          <div className="font-mono-data text-headline-md font-bold text-on-background">{new Date().toLocaleTimeString('en-GB')}</div>
-          <div className="font-label-md text-label-md text-secondary uppercase tracking-wider">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}</div>
+          <div className="text-right">
+          <div className="font-mono-data text-headline-md font-bold text-on-background">{currentTime.toLocaleTimeString('en-GB')}</div>
+          <div className="font-label-md text-label-md text-secondary uppercase tracking-wider">{currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase()}</div>
         </div>
       </header>
       <main className="flex-1 relative flex flex-col items-center justify-center p-xl pt-32">
@@ -666,8 +672,24 @@ const ScreenWelcome = () => {
 
 const ScreenCommands = () => {
   const navigate = useNavigate();
-  const { user, logout } = useSession();
+  const { user, logout, token } = useSession();
+  const [activeTransactions, setActiveTransactions] = useState([]);
+  const [loadingActive, setLoadingActive] = useState(true);
+  const location = useLocation();
   useAuthGuard();
+
+  useEffect(() => {
+    if (!token) return setLoadingActive(false);
+    setLoadingActive(true);
+    api
+      .getActiveTransactions(token)
+      .then((res) => setActiveTransactions(res.transactions || []))
+      .catch(() => setActiveTransactions([]))
+      .finally(() => setLoadingActive(false));
+  }, [token, location.key]);
+  useEffect(() => {
+    console.debug('ScreenCommands: token=', token, 'activeTransactions=', activeTransactions);
+  }, [token, activeTransactions]);
 
   return (
     <div className="min-h-screen flex flex-col vignette-overlay bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
@@ -675,21 +697,25 @@ const ScreenCommands = () => {
       <main className="flex-grow flex flex-col items-center justify-center pt-xl px-lg mt-16 relative">
         <div className="w-full max-w-6xl z-10 py-xl">
           <div className="mb-xl text-center">
-            <h2 className="font-headline-lg text-headline-lg text-on-background">Welcome back, {user?.id || 'Student'}</h2>
+            <h2 className="font-headline-lg text-headline-lg text-white">Welcome back, {user?.id || 'Student'}</h2>
             <div className="flex items-center justify-center gap-sm mt-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="font-label-md text-label-md text-secondary uppercase tracking-widest">Authenticated & Validated System Access</span>
+              <span className="font-label-md text-label-md text-white uppercase tracking-widest">Authenticated & Validated System Access</span>
             </div>
           </div>
-          <div className="flex items-center gap-md mb-lg">
+            <div className="flex items-center gap-md mb-lg">
             <div className="h-[1px] flex-grow bg-outline-variant"></div>
-            <p className="font-title-lg text-title-lg text-secondary uppercase tracking-widest whitespace-nowrap px-md">Select a transaction to proceed</p>
+            <p className="font-title-lg text-title-lg text-white uppercase tracking-widest whitespace-nowrap px-md">Select a transaction to proceed</p>
             <div className="h-[1px] flex-grow bg-outline-variant"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-xl max-w-5xl mx-auto h-[440px]">
-            <button
-              onClick={() => navigate('/deposit')}
-              className="group relative flex flex-col items-center justify-center bg-white border-2 border-outline-variant rounded-xl p-xl shadow-sm hover:border-primary hover:shadow-2xl transition-all duration-300 overflow-hidden text-left"
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => { if (activeTransactions.length === 0) navigate('/deposit'); }}
+              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && activeTransactions.length === 0) navigate('/deposit'); }}
+              aria-disabled={activeTransactions.length > 0}
+              className={`group relative flex flex-col items-center justify-center bg-white border-2 border-outline-variant rounded-xl p-xl shadow-sm transition-all duration-300 overflow-hidden text-left ${activeTransactions.length > 0 ? 'opacity-80 cursor-not-allowed' : 'hover:border-primary hover:shadow-2xl cursor-pointer'}`}
             >
               <div className="absolute top-0 left-0 w-2 h-full bg-primary opacity-20 group-hover:opacity-100 transition-opacity"></div>
               <div className="mb-lg w-24 h-24 bg-primary-fixed rounded-2xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
@@ -700,7 +726,18 @@ const ScreenCommands = () => {
               <span className="font-display-lg text-display-lg text-on-background tracking-tighter mb-sm">BORROW</span>
               <p className="font-body-lg text-body-lg text-secondary max-w-[320px] text-center">Checkout laboratory equipment and automatically unlock the assigned compartment.</p>
               <span className="absolute -bottom-4 -right-4 font-display-lg text-[140px] text-surface-container opacity-5 select-none pointer-events-none">01</span>
-            </button>
+              {activeTransactions.length > 0 && (
+                <>
+                  <div className="absolute inset-0 bg-on-background/60 backdrop-blur-sm z-40" />
+                  <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-auto">
+                    <div className="text-center p-lg bg-transparent">
+                      <div className="font-title-lg text-white mb-md">You have an active borrow</div>
+                      <button onClick={() => navigate('/return-confirm')} className="px-lg py-md bg-primary text-on-primary rounded-lg font-bold">Return item</button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => navigate('/return-confirm')}
               className="group relative flex flex-col items-center justify-center bg-white border-2 border-outline-variant rounded-xl p-xl shadow-sm hover:border-on-secondary-container hover:shadow-2xl transition-all duration-300 overflow-hidden text-left"
@@ -717,13 +754,16 @@ const ScreenCommands = () => {
             </button>
           </div>
           <div className="mt-xl flex justify-between items-center px-md max-w-5xl mx-auto">
-            <button
-              onClick={logout}
-              className="flex items-center gap-md px-lg py-md border-2 border-outline text-on-surface-variant font-bold rounded-lg hover:bg-error-container hover:text-on-error-container hover:border-error transition-all duration-200"
-            >
-              <span className="material-symbols-outlined">cancel</span>
-              <span className="font-title-lg text-title-lg uppercase">Sign Out</span>
-            </button>
+            <div className="flex gap-md items-center">
+              <button onClick={() => navigate('/')} className="flex items-center gap-md px-lg py-md border-2 border-outline rounded-lg">Back</button>
+              <button
+                onClick={() => { logout(); navigate('/'); }}
+                className="flex items-center gap-md px-lg py-md border-2 border-outline text-on-surface-variant font-bold rounded-lg hover:bg-error-container hover:text-on-error-container hover:border-error transition-all duration-200"
+              >
+                <span className="material-symbols-outlined">cancel</span>
+                <span className="font-title-lg text-title-lg uppercase">Sign Out</span>
+              </button>
+            </div>
             <div className="flex items-center gap-lg">
               <div className="flex flex-col items-end">
                 <span className="font-label-md text-label-md text-secondary uppercase">Station</span>
@@ -752,6 +792,17 @@ const ScreenDeposit = () => {
       // verify session / credentials against backend
       await api.getCurrentStudent(token);
       setMessage('Coin received. Session verified.');
+      // ensure student has no active borrow before proceeding
+      try {
+        const active = await api.getActiveTransactions(token);
+        if (active.transactions && active.transactions.length > 0) {
+          setStatus('You have an active borrow. Redirecting to return...');
+          navigate('/return-confirm');
+          return;
+        }
+      } catch (err) {
+        // ignore and proceed to selection
+      }
       navigate('/tool-selection');
     } catch (err) {
       setStatus(err.message || 'Unable to verify session.');
@@ -821,32 +872,69 @@ const ScreenDeposit = () => {
 
 const ScreenToolSelection = () => {
   const navigate = useNavigate();
-  const { token, setSelectedTool, setError } = useSession();
+  const { token, setSelectedTool, setError, logout } = useSession();
   const [tools, setTools] = useState([]);
+  const [activeTransactions, setActiveTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useAuthGuard();
 
   useEffect(() => {
-    api
-      .getTools(token)
-      .then((result) => setTools(result.tools || []))
+    setLoading(true);
+    Promise.all([api.getTools(token), api.getActiveTransactions(token)])
+      .then(([toolsResult, activeResult]) => {
+        setTools(toolsResult.tools || []);
+        setActiveTransactions(activeResult.transactions || []);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [token, setError]);
+  useEffect(() => {
+    console.debug('ScreenToolSelection: token=', token, 'activeTransactions=', activeTransactions);
+  }, [token, activeTransactions]);
+
+  
 
   const handleSelect = (tool) => {
-    setSelectedTool(tool);
-    navigate('/tool-release');
+    (async () => {
+      try {
+        const live = await api.getActiveTransactions(token);
+        const liveCount = (live.transactions || []).length;
+        console.debug('handleSelect: live active count=', liveCount, 'client active count=', activeTransactions.length);
+        if (liveCount > 0) {
+          setError('You have an active borrow. Please return it before borrowing another tool.');
+          navigate('/return-confirm');
+          return;
+        }
+        setSelectedTool(tool);
+        navigate('/tool-release');
+      } catch (err) {
+        // if the live check fails, fall back to client-side state
+        if (activeTransactions.length > 0) {
+          setError('You have an active borrow. Please return it before borrowing another tool.');
+          return;
+        }
+        setSelectedTool(tool);
+        navigate('/tool-release');
+      }
+    })();
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="pt-24 px-lg pb-xl flex flex-col max-w-screen-2xl mx-auto w-full">
+        <div className="flex justify-between items-center mb-md">
+          <div>
+            <button onClick={() => navigate('/commands')} className="px-md py-sm border rounded mr-md">Back</button>
+          </div>
+          <div>
+            <button onClick={() => { logout(); navigate('/'); }} className="px-md py-sm border rounded bg-white">Sign Out</button>
+          </div>
+        </div>
         <header className="mb-lg">
-          <div className="flex items-center gap-sm text-secondary font-label-md text-label-md mb-sm"><span>Lab A</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span>Equipment Kiosk</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span className="text-primary font-bold">Tool Selection</span></div>
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-md"><div><h1 className="font-headline-lg text-on-background">Select the tool you wish to borrow</h1><p className="font-body-lg text-secondary mt-xs">Choose from the available high-precision laboratory equipment.</p></div><div className="bg-surface-container-lowest border border-outline-variant p-md rounded-xl flex items-center gap-md shadow-sm"><div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container"><span className="material-symbols-outlined">verified_user</span></div><div><div className="font-label-md text-secondary">Student Access</div><div className="font-title-lg font-mono-data text-on-surface">VERIFIED</div></div></div></div>
+          <div className="flex items-center gap-sm font-label-md text-label-md mb-sm text-white"><span>Lab A</span><span className="material-symbols-outlined text-[14px] text-white">chevron_right</span><span>Equipment Kiosk</span><span className="material-symbols-outlined text-[14px] text-white">chevron_right</span><span className="text-white font-bold">Tool Selection</span></div>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-md"><div><h1 className="font-headline-lg text-white">Select the tool you wish to borrow</h1><p className="font-body-lg text-white mt-xs">Choose from the available high-precision laboratory equipment.</p></div><div className="bg-surface-container-lowest border border-outline-variant p-md rounded-xl flex items-center gap-md shadow-sm"><div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container"><span className="material-symbols-outlined">verified_user</span></div><div><div className="font-label-md text-secondary">Student Access</div><div className="font-title-lg font-mono-data text-on-surface">VERIFIED</div></div></div></div>
         </header>
         {loading ? (
           <div className="p-lg bg-white rounded-xl shadow-sm text-center">Loading available tools...</div>
@@ -861,8 +949,15 @@ const ScreenToolSelection = () => {
                 <div className="aspect-video relative overflow-hidden bg-surface-container"><img src={getToolVisual(tool.id).image} alt={tool.name} className="w-full h-full object-contain object-center bg-white" /><div className={`${tool.availableQty ? 'bg-emerald-500' : 'bg-slate-500'} absolute top-md right-md text-white font-label-md px-md py-xs rounded-full shadow-lg`}>{tool.availableQty}/{tool.totalQty} Available</div></div>
                 <div className="p-lg flex-1 flex flex-col">
                   <div className="flex items-center gap-md mb-sm"><span className="material-symbols-outlined text-primary bg-primary-fixed p-sm rounded-lg">{getToolVisual(tool.id).icon}</span><h3 className="font-title-lg text-on-surface">{tool.name}</h3></div>
-                  <p className="font-body-md text-secondary mb-lg flex-1">{tool.description}</p>
-                  <button className="w-full py-md bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary font-label-md rounded-lg transition-all border border-outline-variant group-hover:border-primary">SELECT TOOL</button>
+                  <p className="font-body-md text-secondary mb-sm flex-1">{tool.description}</p>
+                  <div className="font-label-md text-secondary mb-lg">Compartments: {tool.compartments?.join(', ') || tool.slot}</div>
+                  <button
+                    className="w-full py-md bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary font-label-md rounded-lg transition-all border border-outline-variant group-hover:border-primary"
+                    onClick={(e) => { e.stopPropagation(); handleSelect(tool); }}
+                    disabled={activeTransactions.length > 0}
+                  >
+                    {activeTransactions.length > 0 ? 'Return current tool first' : 'SELECT TOOL'}
+                  </button>
                 </div>
               </div>
             ))}
@@ -875,7 +970,7 @@ const ScreenToolSelection = () => {
 
 const ScreenToolRelease = () => {
   const navigate = useNavigate();
-  const { token, selectedTool, setError, setMessage } = useSession();
+  const { token, selectedTool, setSelectedTool, setError, setMessage, logout } = useSession();
   const [busy, setBusy] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
   const [successPayload, setSuccessPayload] = useState(null);
@@ -899,14 +994,16 @@ const ScreenToolRelease = () => {
     setError('');
 
     try {
-      await api.borrow(selectedTool.id, compartmentId, token);
-      await api.openCompartment(compartmentId, token);
+      const borrowResult = await api.borrow(selectedTool.id, compartmentId, token);
+      const assignedCompartmentId = borrowResult?.transaction?.compartmentId || compartmentId;
+      setSelectedTool({ ...selectedTool, slot: assignedCompartmentId });
+      await api.openCompartment(assignedCompartmentId, token);
       setSuccessPayload({
         title: 'Borrow Successful',
-        message: `Borrow confirmed. ${selectedTool.name} has been assigned and the locker opened at ${compartmentId}.`,
+        message: `Borrow confirmed. ${selectedTool.name} has been assigned and the locker opened at ${assignedCompartmentId}.`,
         details: [
           { label: 'Tool', value: selectedTool.name },
-          { label: 'Compartment', value: compartmentId },
+          { label: 'Compartment', value: assignedCompartmentId },
         ],
       });
       setSuccessOpen(true);
@@ -926,6 +1023,14 @@ const ScreenToolRelease = () => {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="max-w-6xl mx-auto pt-32 pb-12 px-lg">
+        <div className="flex justify-between items-center mb-md">
+          <div>
+            <button onClick={() => { setSelectedTool(null); navigate('/tool-selection'); }} className="px-md py-sm border rounded mr-md">Back</button>
+          </div>
+          <div>
+            <button onClick={() => { logout(); navigate('/'); }} className="px-md py-sm border rounded bg-white">Sign Out</button>
+          </div>
+        </div>
         <div className="text-center mb-xl">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 mb-md">
             <span className="material-symbols-outlined text-emerald-600 text-5xl">lock_open</span>
@@ -1033,9 +1138,9 @@ const ScreenReturnConfirm = () => {
       <TopBar />
       <main className="pt-24 min-h-screen px-lg pb-xl flex flex-col max-w-screen-2xl mx-auto w-full">
         <header className="mb-lg">
-          <div className="flex items-center gap-sm text-secondary font-label-md text-label-md mb-sm"><span>Lab A</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span>Equipment Kiosk</span><span className="material-symbols-outlined text-[14px]">chevron_right</span><span className="text-primary font-bold">Return Confirmation</span></div>
+          <div className="flex items-center gap-sm font-label-md text-label-md mb-sm text-white"><span>Lab A</span><span className="material-symbols-outlined text-[14px] text-white">chevron_right</span><span>Equipment Kiosk</span><span className="material-symbols-outlined text-[14px] text-white">chevron_right</span><span className="text-white font-bold">Return Confirmation</span></div>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-md">
-            <div><h1 className="font-headline-lg text-on-background">Confirm Equipment Return</h1><p className="font-body-lg text-secondary mt-xs">Verify the current transaction before opening the storage compartment.</p></div>
+            <div><h1 className="font-headline-lg text-white">Confirm Equipment Return</h1><p className="font-body-lg text-white mt-xs">Verify the current transaction before opening the storage compartment.</p></div>
           </div>
         </header>
         <div className="w-full grid grid-cols-12 gap-gutter">
@@ -1130,6 +1235,8 @@ const ScreenReturnAction = () => {
     try {
       await api.openCompartment(compartmentId, token);
       await api.returnTransaction(transaction.id, compartmentId, token);
+      // refresh active transactions to ensure server state is up-to-date before navigating
+      try { await api.getActiveTransactions(token); } catch (_) {}
       setSuccessPayload({
         title: 'Return Successful',
         message: 'Return completed. Thank you for using the lab inventory kiosk.',
@@ -1151,6 +1258,14 @@ const ScreenReturnAction = () => {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <TopBar />
       <main className="flex-grow pt-24 pb-lg px-xl flex gap-lg container-max mx-auto w-full">
+        <div className="flex justify-between items-center mb-md">
+          <div>
+            <button onClick={() => navigate('/commands')} className="px-md py-sm border rounded mr-md">Back</button>
+          </div>
+          <div>
+            <button onClick={() => { logout(); navigate('/'); }} className="px-md py-sm border rounded bg-white">Sign Out</button>
+          </div>
+        </div>
         {!transaction ? (
           <section className="w-full flex items-center justify-center">
             <div className="bg-white p-lg rounded-xl text-center space-y-md max-w-md w-full">
@@ -1221,7 +1336,7 @@ const ScreenReturnAction = () => {
         onClose={() => {
           setSuccessOpen(false);
           setSuccessPayload(null);
-          navigate('/commands');
+          navigate('/commands', { state: { refresh: Date.now() } });
         }}
       />
     </div>
@@ -1253,6 +1368,9 @@ const ScreenAdmin = () => {
   const [busy, setBusy] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetStudent, setDeleteTargetStudent] = useState(null);
+  const [selectedCompartment, setSelectedCompartment] = useState(null);
+  const [assignmentBusy, setAssignmentBusy] = useState(false);
+  const [selectedCompartmentToolIdState, setSelectedCompartmentToolIdState] = useState('');
 
   const clearAdminState = () => {
     setSummary(null);
@@ -1351,13 +1469,28 @@ const ScreenAdmin = () => {
   const transactions = summary?.activeTransactions || [];
   const compartments = Array.from({ length: 16 }, (_, index) => {
     const slot = `C-${String(index + 1).padStart(2, '0')}`;
-    const tool = tools.find((item) => item.slot === slot);
+    const tool = tools.find((item) => item.compartments?.includes(slot));
     return {
       slot,
       name: tool?.name || 'Unassigned',
+      tool,
       occupied: transactions.some((transaction) => transaction.compartmentId === slot),
+      statusLabel: transactions.some((transaction) => transaction.compartmentId === slot) ? 'Not available' : 'Available',
     };
   });
+  const selectedCompartmentInfo = compartments.find((compartment) => compartment.slot === selectedCompartment) || null;
+  const selectedCompartmentToolId = selectedCompartmentInfo?.tool?.id || '';
+  const assignmentToolOptions = tools.filter((tool) => ['tool-1', 'tool-2', 'tool-3', 'tool-4'].includes(tool.id));
+
+  useEffect(() => {
+    // keep a dedicated state for the select control so changes show immediately
+    if (!selectedCompartment) {
+      setSelectedCompartmentToolIdState('');
+      return;
+    }
+    const info = compartments.find((c) => c.slot === selectedCompartment) || null;
+    setSelectedCompartmentToolIdState(info?.tool?.id || '');
+  }, [selectedCompartment, tools, transactions]);
 
   const formatStatus = (transaction) => {
     if (transaction.status === 'returned') return 'Returned';
@@ -1496,6 +1629,34 @@ const ScreenAdmin = () => {
     }
   };
 
+  const handleCompartmentAssignmentChange = async (compartmentId, toolId) => {
+    if (!compartmentId || !toolId || assignmentBusy) return;
+    const previousToolId = compartments.find((item) => item.slot === compartmentId)?.tool?.id;
+    setAssignmentBusy(true);
+    setError('');
+    try {
+      await api.assignCompartmentTool(token, compartmentId, toolId);
+      setTools((currentTools) => currentTools
+        .map((tool) => {
+          const compartmentsForTool = (tool.compartments || []).filter((value) => value !== compartmentId);
+          if (tool.id === previousToolId) {
+            return { ...tool, compartments: compartmentsForTool };
+          }
+          if (tool.id === toolId) {
+            return { ...tool, compartments: [...new Set([...compartmentsForTool, compartmentId])] };
+          }
+          return tool;
+        }));
+      await loadDashboard();
+      setSuccessMessage(`Compartment ${compartmentId} now points to the selected tool.`);
+      setSelectedCompartment(compartmentId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAssignmentBusy(false);
+    }
+  };
+
   if (!token) {
     return (
       <div className="bg-background min-h-screen flex items-center justify-center p-lg">
@@ -1526,7 +1687,14 @@ const ScreenAdmin = () => {
     <div className="min-h-screen bg-gradient-to-b from-[#FE0406] via-[#ff8f8f] to-white">
       <header className="fixed top-0 w-full z-50 flex justify-between items-center px-lg py-md bg-surface border-b border-outline-variant">
         <div className="flex items-center gap-md">
-          <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xs">TUP</div>
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            aria-label="Go to admin home"
+            className="w-8 h-8 rounded-full overflow-hidden bg-surface border border-outline-variant flex items-center justify-center p-0"
+          >
+            <img src="/src/assets/tupm_logo.png" alt="Site icon" className="w-full h-full object-cover" />
+          </button>
           <span className="font-headline-md text-headline-md font-bold text-primary">Admin Dashboard</span>
         </div>
         <div className="ml-auto flex items-center gap-md">
@@ -1587,10 +1755,52 @@ const ScreenAdmin = () => {
                   <div className="lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
                     <div className="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
                       <h4 className="font-title-lg flex items-center gap-sm"><span className="material-symbols-outlined text-primary">grid_view</span>Storage Compartments Overview</h4>
-                      <div className="flex items-center gap-md text-label-md font-label-md"><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-emerald-500 rounded-full" />Available</span><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-slate-400 rounded-full" />Occupied</span></div>
+                      <div className="flex items-center gap-md text-label-md font-label-md"><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-emerald-500 rounded-full" />Available</span><span className="flex items-center gap-xs"><i className="w-3 h-3 bg-slate-400 rounded-full" />Not available</span></div>
                     </div>
-                    <div className="p-lg grid grid-cols-2 sm:grid-cols-4 gap-md">
-                      {compartments.map((compartment) => <div key={compartment.slot} className={`relative group border p-md rounded-lg transition-all hover:shadow-md ${compartment.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'}`}><div className="flex justify-between items-start mb-sm"><span className={`font-mono-data font-bold ${compartment.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{compartment.slot}</span><span className={`material-symbols-outlined text-[18px] ${compartment.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{compartment.occupied ? 'lock' : 'check_circle'}</span></div><p className="font-label-md truncate text-on-surface">{compartment.name}</p></div>)}
+                    <div className="p-lg space-y-md">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-md">
+                        {compartments.map((compartment) => (
+                          <button
+                            key={compartment.slot}
+                            type="button"
+                            onClick={() => setSelectedCompartment(compartment.slot)}
+                            className={`relative group border p-md rounded-lg text-left transition-all hover:shadow-md ${compartment.occupied ? 'border-outline-variant bg-surface-container-high' : 'border-emerald-100 bg-emerald-50/30'} ${selectedCompartment === compartment.slot ? 'ring-2 ring-primary' : ''}`}
+                          >
+                            <div className="flex justify-between items-start mb-sm">
+                              <span className={`font-mono-data font-bold ${compartment.occupied ? 'text-secondary' : 'text-emerald-700'}`}>{compartment.slot}</span>
+                              <span className={`material-symbols-outlined text-[18px] ${compartment.occupied ? 'text-slate-400' : 'text-emerald-500'}`}>{compartment.occupied ? 'lock' : 'check_circle'}</span>
+                            </div>
+                            <p className="font-label-md truncate text-on-surface">{compartment.name}</p>
+                            <p className={`text-xs mt-sm font-semibold ${compartment.occupied ? 'text-slate-500' : 'text-emerald-600'}`}>{compartment.statusLabel}</p>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="rounded-xl border border-outline-variant bg-surface-container-low p-md space-y-md">
+                        <div className="flex items-center justify-between gap-md">
+                          <div>
+                            <p className="font-label-md text-secondary uppercase">Selected compartment</p>
+                            <p className="font-title-lg text-on-surface">{selectedCompartment || 'Choose a compartment'}</p>
+                          </div>
+                          <div className="px-sm py-xs rounded-full bg-primary/10 text-primary font-label-md">Live DB mapping</div>
+                        </div>
+                        <label className="block font-label-md text-secondary uppercase">Assign tool to this compartment</label>
+                        <select
+                          className="w-full border border-outline-variant rounded px-md py-sm"
+                          value={selectedCompartmentToolIdState}
+                          onChange={(event) => {
+                            const newToolId = event.target.value;
+                            setSelectedCompartmentToolIdState(newToolId);
+                            handleCompartmentAssignmentChange(selectedCompartment, newToolId);
+                          }}
+                          disabled={!selectedCompartment || assignmentBusy}
+                        >
+                          <option value="">Unassigned</option>
+                          {assignmentToolOptions.map((tool) => (
+                            <option key={tool.id} value={tool.id}>{tool.name}</option>
+                          ))}
+                        </select>
+                        <p className="text-sm text-secondary">Changing this assignment updates the same database-backed mapping used by borrowers when they select a tool and unlock the compartment.</p>
+                      </div>
                     </div>
                   </div>
                   <aside className="lg:col-span-4 flex flex-col gap-lg">

@@ -5,13 +5,15 @@ function mapStudent(row) {
 }
 
 function mapTool(row) {
+  const compartments = row?.compartment_ids ? row.compartment_ids.split(',').filter(Boolean) : (row?.slot ? [row.slot] : []);
   return row && {
     id: row.id,
     name: row.name,
     description: row.description,
-    slot: row.slot,
+    slot: row.primary_compartment_id || row.slot || compartments[0] || '',
     totalQty: row.total_qty,
     availableQty: row.available_qty,
+    compartments,
   };
 }
 
@@ -183,7 +185,45 @@ function createInventoryRepository(db) {
     },
 
     async listTools() {
-      return (await db.all('SELECT * FROM tools ORDER BY id')).map(mapTool);
+      const rows = await db.all(`
+        SELECT t.id, t.name, t.description, t.slot,
+               COUNT(tca.compartment_id) AS total_qty,
+               COUNT(tca.compartment_id) - COALESCE(active_counts.active_count, 0) AS available_qty,
+               GROUP_CONCAT(tca.compartment_id, ',') AS compartment_ids,
+               MIN(tca.compartment_id) AS primary_compartment_id
+        FROM tools t
+        LEFT JOIN tool_compartment_assignments tca ON tca.tool_id = t.id
+        LEFT JOIN (
+          SELECT tool_id, COUNT(*) AS active_count
+          FROM transactions
+          WHERE returned_at IS NULL
+          GROUP BY tool_id
+        ) AS active_counts ON active_counts.tool_id = t.id
+        GROUP BY t.id, t.name, t.description, t.slot
+        ORDER BY t.id
+      `);
+      return rows.map(mapTool);
+    },
+
+    async assignCompartmentTool({ compartmentId, toolId }) {
+      return serializeWrite(async () => {
+        await db.exec('BEGIN IMMEDIATE');
+        try {
+          const tool = await db.get('SELECT id FROM tools WHERE id = ?', [toolId]);
+          if (!tool) {
+            await db.exec('ROLLBACK');
+            return { reason: 'TOOL_NOT_FOUND' };
+          }
+
+          await db.run('DELETE FROM tool_compartment_assignments WHERE compartment_id = ?', [compartmentId]);
+          await db.run('INSERT INTO tool_compartment_assignments (compartment_id, tool_id) VALUES (?, ?)', [compartmentId, toolId]);
+          await db.exec('COMMIT');
+          return { compartmentId, toolId };
+        } catch (error) {
+          await db.exec('ROLLBACK');
+          throw error;
+        }
+      });
     },
 
     async findActiveTransactionByStudentId(studentId) {
@@ -217,8 +257,15 @@ function createInventoryRepository(db) {
           }
 
           const borrowedAt = Date.now();
-          const toolDetails = await db.get('SELECT slot FROM tools WHERE id = ?', [toolId]);
-          const assignedCompartmentId = toolDetails?.slot || compartmentId;
+          const assignedCompartments = (await db.all('SELECT compartment_id FROM tool_compartment_assignments WHERE tool_id = ? ORDER BY compartment_id', [toolId])).map((row) => row.compartment_id);
+          const requestedCompartmentId = compartmentId && assignedCompartments.includes(compartmentId) ? compartmentId : null;
+          const occupiedRows = assignedCompartments.length
+            ? await db.all(`SELECT compartment_id FROM transactions WHERE returned_at IS NULL AND compartment_id IN (${assignedCompartments.map(() => '?').join(',')})`, assignedCompartments)
+            : [];
+          const occupiedCompartmentIds = new Set(occupiedRows.map((row) => row.compartment_id));
+          const assignedCompartmentId = requestedCompartmentId && !occupiedCompartmentIds.has(requestedCompartmentId)
+            ? requestedCompartmentId
+            : (assignedCompartments.find((id) => !occupiedCompartmentIds.has(id)) || assignedCompartments[0]);
           const id = `tx-${randomUUID()}`;
           await db.run(`INSERT INTO transactions
             (id, student_id, tool_id, compartment_id, borrowed_at, due_at, returned_at, return_compartment_id)

@@ -8,13 +8,21 @@ async function request(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
+  console.debug('API request', { path, method, token: token ? 'REDACTED' : null, body });
   const response = await fetch(`${apiBase}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  const data = await response.json().catch(() => ({}));
+  let data = {};
+  try {
+    data = await response.json();
+  } catch (err) {
+    // non-json response
+    data = {};
+  }
+  console.debug('API response', { path, status: response.status, ok: response.ok, data });
   if (!response.ok) {
     throw new Error(data.message || `API error ${response.status}`);
   }
@@ -102,6 +110,9 @@ export const api = {
   },
   getAlerts(token) {
     return request('/alerts', { token });
+  },
+  assignCompartmentTool(token, compartmentId, toolId) {
+    return request(`/admin/compartments/${encodeURIComponent(compartmentId)}/assign`, { method: 'PUT', body: { toolId }, token });
   },
   openCompartment(compartmentId, token) {
     return request('/open', { method: 'POST', body: { compartmentId }, token });

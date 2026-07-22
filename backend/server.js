@@ -102,7 +102,7 @@ async function createApp() {
 
   app.post('/api/borrow', authMiddleware, async (req, res) => {
     const { toolId, compartmentId } = req.body;
-    if (!toolId || !compartmentId) return res.status(400).json({ message: 'Tool ID and compartment ID are required.' });
+    if (!toolId) return res.status(400).json({ message: 'Tool ID is required.' });
     const result = await repository.borrowTool({ student: req.student, toolId, compartmentId, dueAt: Date.now() + borrowDurationMs });
     if (result.reason === 'TOOL_NOT_FOUND') return res.status(404).json({ message: 'Tool not found.' });
     if (result.reason === 'TOOL_UNAVAILABLE') return res.status(400).json({ message: 'Tool is not available.' });
@@ -135,6 +135,20 @@ async function createApp() {
   app.get('/api/admin/summary', authMiddleware, async (req, res) => {
     if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
     return res.json(await repository.getAdminSummary(Date.now()));
+  });
+
+  app.put('/api/admin/compartments/:compartmentId/assign', authMiddleware, async (req, res, next) => {
+    if (!req.admin) return res.status(403).json({ message: 'Admin access required.' });
+    try {
+      const { compartmentId } = req.params;
+      const { toolId } = req.body;
+      if (!toolId) return res.status(400).json({ message: 'Tool ID is required.' });
+      const result = await repository.assignCompartmentTool({ compartmentId, toolId });
+      if (result.reason === 'TOOL_NOT_FOUND') return res.status(404).json({ message: 'Tool not found.' });
+      return res.json({ assignment: result });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   app.get('/api/admin/students', authMiddleware, async (req, res) => {
