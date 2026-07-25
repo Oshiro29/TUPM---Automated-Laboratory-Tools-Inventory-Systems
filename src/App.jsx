@@ -1043,7 +1043,7 @@ const ScreenToolRelease = () => {
             <h3 className="font-title-lg text-primary flex items-center gap-sm mb-lg">Selected Tool</h3>
             <div className="space-y-md">
               <div className="p-lg bg-white rounded-xl border border-outline-variant">
-                <img src={getToolVisual(selectedTool.id).image} alt={selectedTool.name} className="w-full aspect-video object-cover rounded-lg mb-md" />
+                <div className="w-full h-56 overflow-hidden rounded-lg mb-md bg-white"><img src={getToolVisual(selectedTool.id).image} alt={selectedTool.name} className="w-full h-full object-contain object-center" /></div>
                 <h3 className="font-headline-md mb-2">{selectedTool.name}</h3>
                 <p className="text-secondary mb-1">{selectedTool.description}</p>
                 <div className="font-mono-data text-label-md uppercase tracking-wide">Assigned slot: {selectedTool.slot}</div>
@@ -1150,7 +1150,7 @@ const ScreenReturnConfirm = () => {
             <>
               <div className="col-span-12 lg:col-span-7 flex flex-col gap-gutter">
                 <div className="bg-surface-container-lowest border border-outline-variant p-lg rounded-xl flex items-center gap-lg shadow-sm">
-                  <div className="w-24 h-24 bg-surface-container border-2 border-primary-fixed overflow-hidden flex-shrink-0 rounded-xl"><img src={getToolVisual(transaction.toolId).image} alt={transaction.toolName} className="w-full h-full object-cover" /></div>
+                  <div className="w-24 h-24 bg-surface-container border-2 border-primary-fixed overflow-hidden flex-shrink-0 rounded-xl"><img src={getToolVisual(transaction.toolId).image} alt={transaction.toolName} className="w-full h-full object-contain object-center bg-white" /></div>
                   <div className="flex-grow">
                     <span className="font-label-md text-secondary uppercase tracking-tighter">Authorized Borrower</span>
                     <h2 className="font-headline-md">{transaction.studentId}</h2>
@@ -1171,7 +1171,7 @@ const ScreenReturnConfirm = () => {
                 </div>
               </div>
               <div className="col-span-12 lg:col-span-5 flex flex-col gap-gutter">
-                <div className="min-h-[260px] relative overflow-hidden bg-surface-container-highest border border-outline-variant rounded-xl flex flex-col items-center justify-end text-center p-lg"><img src={getToolVisual(transaction.toolId).image} alt={transaction.toolName} className="absolute inset-0 w-full h-full object-cover opacity-70" /><div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><div className="relative text-white"><span className="font-label-md uppercase opacity-80">Verify Item Condition</span><h3 className="font-title-lg mt-xs">Ready for Return</h3><p className="mt-sm">Check the tool and accessories before opening the compartment.</p></div></div>
+                <div className="min-h-[260px] relative overflow-hidden bg-white border border-outline-variant rounded-xl flex flex-col items-center justify-end text-center p-lg"><img src={getToolVisual(transaction.toolId).image} alt={transaction.toolName} className="absolute inset-0 w-full h-full object-contain object-center opacity-90" /><div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><div className="relative text-white"><span className="font-label-md uppercase opacity-80">Verify Item Condition</span><h3 className="font-title-lg mt-xs">Ready for Return</h3><p className="mt-sm">Check the tool and accessories before opening the compartment.</p></div></div>
                 <button
                   onClick={handleOpen}
                   className="group relative bg-primary text-on-primary h-24 flex items-center justify-center gap-md rounded shadow-xl hover:bg-surface-tint transition-all"
