@@ -1,0 +1,193 @@
+---
+config:
+  layout: elk
+---
+graph TB
+    subgraph Client["CLIENT LAYER - React + Vite Frontend"]
+        Welcome["Welcome Screen<br/>- QR Scanner<br/>- Manual Login"]
+        Commands["Commands Screen<br/>- Borrow/Return Options"]
+        Deposit["Deposit Screen<br/>- Coin Detection"]
+        ToolSelection["Tool Selection<br/>- Browse Available Tools"]
+        ToolRelease["Tool Release<br/>- Confirm Checkout"]
+        ReturnConfirm["Return Confirmation<br/>- Verify Transaction"]
+        ReturnAction["Return Action<br/>- Complete Return"]
+        AdminDash["Admin Dashboard<br/>- Student Management<br/>- Audit Logs"]
+        
+        SessionCtx["Session Context<br/>(Auth State)"]
+        Router["React Router<br/>(Navigation)"]
+        QRScanner["QR Scanner<br/>(jsqr)"]
+    end
+
+    subgraph API["API LAYER - Express.js Backend"]
+        Server["Express Server<br/>Port: 5000"]
+        
+        subgraph AuthEndpoints["Authentication"]
+            LoginEP["/api/auth/login<br/>POST - Student PIN"]
+            ScanEP["/api/scan<br/>POST - QR Code"]
+            ValidateEP["/api/validate-qr<br/>POST - Verify QR"]
+            AdminLoginEP["/api/admin/login<br/>POST - Admin Access"]
+        end
+        
+        subgraph StudentEndpoints["Student Operations"]
+            StudentMeEP["/api/student/me<br/>GET - Current User"]
+            ToolsEP["/api/tools<br/>GET - List Tools"]
+            BorrowEP["/api/borrow<br/>POST - Checkout Tool"]
+            ReturnEP["/api/return<br/>POST - Return Tool"]
+            OpenEP["/api/open<br/>POST - Unlock Compartment"]
+            ActiveTxEP["/api/transactions/active<br/>GET - Active Borrows"]
+        end
+        
+        subgraph AdminEndpoints["Admin Operations"]
+            SummaryEP["/api/admin/summary<br/>GET - Dashboard Stats"]
+            ListStudentsEP["/api/admin/students<br/>GET - List Students"]
+            CreateStudentEP["/api/admin/students<br/>POST - Create Student"]
+            UpdateStudentEP["/api/admin/students/:id<br/>PUT - Update Student"]
+            DeleteStudentEP["/api/admin/students/:id<br/>DELETE - Delete Student"]
+            HistoryEP["/api/admin/students/:id/history<br/>GET - Student History"]
+            AuditEP["/api/admin/audit<br/>GET - Audit Logs"]
+            ExportEP["/api/admin/export<br/>GET - CSV Export"]
+            AssignEP["/api/admin/compartments/:id/assign<br/>PUT - Assign Tool"]
+            AlertsEP["/api/alerts<br/>GET - Overdue Alerts"]
+        end
+        
+        AuthMiddleware["Auth Middleware<br/>- Token Validation<br/>- Bearer Token"]
+        ErrorHandler["Error Handler<br/>- Status Codes<br/>- Error Messages"]
+    end
+
+    subgraph Business["BUSINESS LOGIC LAYER"]
+        Repo["Inventory Repository<br/>Pattern"]
+        
+        subgraph RepoMethods["Repository Methods"]
+            StudentOps["Student Operations<br/>- findStudentById<br/>- listStudents<br/>- createStudent<br/>- updateStudent<br/>- deleteStudent"]
+            ToolOps["Tool Operations<br/>- listTools<br/>- assignCompartmentTool"]
+            TxOps["Transaction Operations<br/>- borrowTool<br/>- returnTool<br/>- listAuditTransactions<br/>- getAdminSummary"]
+            AlertOps["Alert Operations<br/>- syncOverdueAlerts<br/>- listAlerts"]
+        end
+        
+        Serialization["Write Serialization<br/>- Prevent Race Conditions<br/>- ACID Compliance"]
+    end
+
+    subgraph Database["DATA PERSISTENCE LAYER - SQLite3"]
+        DB["SQLite Database<br/>inventory.sqlite"]
+        
+        subgraph Schema["Database Schema"]
+            StudentsT["students<br/>- id PK<br/>- name<br/>- pin<br/>- email"]
+            ToolsT["tools<br/>- id PK<br/>- name<br/>- description<br/>- slot<br/>- total_qty<br/>- available_qty"]
+            TxT["transactions<br/>- id PK<br/>- student_id FK<br/>- tool_id FK<br/>- compartment_id<br/>- borrowed_at<br/>- due_at<br/>- returned_at<br/>- return_compartment_id"]
+            AssignT["tool_compartment_assignments<br/>- compartment_id PK<br/>- tool_id FK"]
+            AlertsT["alerts<br/>- id PK<br/>- message<br/>- created_at<br/>- transaction_id FK<br/>- alert_type<br/>- resolved_at"]
+            MigrationsT["schema_migrations<br/>- filename PK<br/>- applied_at"]
+        end
+        
+        Migrations["Database Migrations<br/>- Version Control<br/>- Schema Evolution"]
+        WAL["Write-Ahead Logging<br/>- PRAGMA journal_mode"]
+    end
+
+    subgraph External["EXTERNAL SYSTEMS"]
+        Hardware["Hardware Controller<br/>- Compartment Unlock<br/>- Solenoid Control"]
+        Notifications["Notifications<br/>- Overdue Alerts<br/>- Email Integration"]
+    end
+
+    subgraph Data["DATA MODELS"]
+        Coin["Coin Model<br/>- Old ₱10<br/>- New ₱10"]
+        Station["Station ID<br/>- LAB-KIO-04"]
+        Timer["Session Timer<br/>- 3 Hour Borrow Limit<br/>- Countdown Display"]
+    end
+    Welcome --> Router
+    Commands --> Router
+    Deposit --> Router
+    ToolSelection --> Router
+    ToolRelease --> Router
+    ReturnConfirm --> Router
+    ReturnAction --> Router
+    AdminDash --> Router
+    
+    Router --> SessionCtx
+    Welcome --> QRScanner
+    Welcome --> SessionCtx
+    SessionCtx -->|HTTP/REST| Server
+    QRScanner -->|HTTP/REST| Server
+    
+    Server --> AuthMiddleware
+    Server --> ErrorHandler
+    
+    Server --> LoginEP
+    Server --> ScanEP
+    Server --> ValidateEP
+    Server --> AdminLoginEP
+    
+    Server --> StudentMeEP
+    Server --> ToolsEP
+    Server --> BorrowEP
+    Server --> ReturnEP
+    Server --> OpenEP
+    Server --> ActiveTxEP
+    
+    Server --> SummaryEP
+    Server --> ListStudentsEP
+    Server --> CreateStudentEP
+    Server --> UpdateStudentEP
+    Server --> DeleteStudentEP
+    Server --> HistoryEP
+    Server --> AuditEP
+    Server --> ExportEP
+    Server --> AssignEP
+    Server --> AlertsEP
+    AuthMiddleware --> Repo
+    LoginEP --> Repo
+    ScanEP --> Repo
+    ValidateEP --> Repo
+    AdminLoginEP --> Repo
+    StudentMeEP --> Repo
+    ToolsEP --> Repo
+    BorrowEP --> Repo
+    ReturnEP --> Repo
+    ActiveTxEP --> Repo
+    SummaryEP --> Repo
+    ListStudentsEP --> Repo
+    CreateStudentEP --> Repo
+    UpdateStudentEP --> Repo
+    DeleteStudentEP --> Repo
+    HistoryEP --> Repo
+    AuditEP --> Repo
+    AssignEP --> Repo
+    AlertsEP --> Repo
+    
+    Repo --> StudentOps
+    Repo --> ToolOps
+    Repo --> TxOps
+    Repo --> AlertOps
+    Repo --> Serialization
+    StudentOps --> DB
+    ToolOps --> DB
+    TxOps --> DB
+    AlertOps --> DB
+    
+    DB --> StudentsT
+    DB --> ToolsT
+    DB --> TxT
+    DB --> AssignT
+    DB --> AlertsT
+    DB --> MigrationsT
+    
+    DB --> Migrations
+    DB --> WAL
+    OpenEP --> Hardware
+    TxOps --> Notifications
+    AlertOps --> Notifications
+    BorrowEP -.->|Uses| Timer
+    Deposit -.->|Uses| Coin
+    Commands -.->|Shows| Station
+    classDef client fill:#F3E5F5,stroke:#7B1FA2,color:#000
+    classDef api fill:#E1F5FE,stroke:#01579B,color:#000
+    classDef business fill:#E8F5E9,stroke:#1B5E20,color:#000
+    classDef database fill:#FFF3E0,stroke:#E65100,color:#000
+    classDef external fill:#FFEBEE,stroke:#B71C1C,color:#000
+    classDef data fill:#F1F8E9,stroke:#558B2F,color:#000
+    
+    class Client client
+    class API,Server,AuthMiddleware,ErrorHandler api
+    class Business,Repo,Serialization business
+    class Database,DB,Migrations,WAL database
+    class External,Hardware,Notifications external
+    class Data,Coin,Station,Timer data

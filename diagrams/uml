@@ -1,0 +1,178 @@
+@startuml TUPM_System_Architecture
+
+!define TECH_COLOR #E1F5FE
+!define UI_COLOR #F3E5F5
+!define SERVICE_COLOR #E8F5E9
+!define DATA_COLOR #FFF3E0
+!define EXTERNAL_COLOR #FFEBEE
+
+skinparam rectangle {
+    BackgroundColor<<tech>> TECH_COLOR
+    BackgroundColor<<ui>> UI_COLOR
+    BackgroundColor<<service>> SERVICE_COLOR
+    BackgroundColor<<data>> DATA_COLOR
+    BackgroundColor<<external>> EXTERNAL_COLOR
+}
+
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #333
+}
+
+' ==================== Client Layer ====================
+package "Frontend (React + Vite)" <<ui>> {
+    rectangle "React Application" as ReactApp
+    rectangle "QR Scanner\n(jsqr library)" as QRScanner
+    rectangle "Routing\n(React Router)" as Router
+    rectangle "Session Context\n(Authentication)" as SessionContext
+    
+    ReactApp --> Router
+    ReactApp --> QRScanner
+    ReactApp --> SessionContext
+}
+
+' ==================== API Layer ====================
+package "Backend API (Express.js)" <<service>> {
+    rectangle "Express Server\n(Port 5000)" as ExpressServer
+    
+    package "Authentication Routes" {
+        rectangle "POST /api/auth/login\n(Student PIN Login)" as StudentLogin
+        rectangle "POST /api/admin/login\n(Admin Access)" as AdminLogin
+        rectangle "POST /api/scan\n(QR Code Login)" as QRLogin
+        rectangle "POST /api/validate-qr\n(QR Validation)" as QRValidate
+    }
+    
+    package "Student Routes" {
+        rectangle "GET /api/student/me\n(Current Student)" as StudentMe
+        rectangle "GET /api/tools\n(List Available Tools)" as ListTools
+        rectangle "POST /api/borrow\n(Borrow Tool)" as BorrowTool
+        rectangle "POST /api/return\n(Return Tool)" as ReturnTool
+        rectangle "POST /api/open\n(Hardware Unlock)" as OpenCompartment
+        rectangle "GET /api/transactions/active\n(Active Borrows)" as ActiveTx
+    }
+    
+    package "Admin Routes" {
+        rectangle "GET /api/admin/summary\n(Dashboard)" as AdminSummary
+        rectangle "GET /api/admin/students\n(List Students)" as ListStudents
+        rectangle "POST /api/admin/students\n(Create Student)" as CreateStudent
+        rectangle "PUT /api/admin/students/:id\n(Update Student)" as UpdateStudent
+        rectangle "DELETE /api/admin/students/:id\n(Delete Student)" as DeleteStudent
+        rectangle "GET /api/admin/students/:id/history\n(History)" as StudentHistory
+        rectangle "GET /api/admin/audit\n(Audit Log)" as AuditLog
+        rectangle "GET /api/admin/export\n(CSV Export)" as ExportCSV
+        rectangle "PUT /api/admin/compartments/:id/assign\n(Assign Tool)" as AssignTool
+        rectangle "GET /api/alerts\n(Alerts)" as ListAlerts
+    }
+    
+    ExpressServer --> StudentLogin
+    ExpressServer --> AdminLogin
+    ExpressServer --> QRLogin
+    ExpressServer --> QRValidate
+    ExpressServer --> StudentMe
+    ExpressServer --> ListTools
+    ExpressServer --> BorrowTool
+    ExpressServer --> ReturnTool
+    ExpressServer --> OpenCompartment
+    ExpressServer --> ActiveTx
+    ExpressServer --> AdminSummary
+    ExpressServer --> ListStudents
+    ExpressServer --> CreateStudent
+    ExpressServer --> UpdateStudent
+    ExpressServer --> DeleteStudent
+    ExpressServer --> StudentHistory
+    ExpressServer --> AuditLog
+    ExpressServer --> ExportCSV
+    ExpressServer --> AssignTool
+    ExpressServer --> ListAlerts
+}
+
+' ==================== Service Layer ====================
+package "Business Logic (Repository Pattern)" <<service>> {
+    rectangle "Inventory Repository\n(inventoryRepository.js)" as InventoryRepo
+    
+    note right of InventoryRepo
+        - findStudentById()
+        - listStudents()
+        - createStudent() / updateStudent() / deleteStudent()
+        - listTools()
+        - borrowTool()
+        - returnTool()
+        - listAuditTransactions()
+        - getAdminSummary()
+        - listAlerts()
+        - syncOverdueAlerts()
+        - assignCompartmentTool()
+    end note
+}
+
+' ==================== Database Layer ====================
+package "Data Persistence (SQLite3)" <<data>> {
+    rectangle "SQLite Database\n(inventory.sqlite)" as SQLiteDB
+    
+    package "Schema" {
+        rectangle "students\n(id, name, pin, email)" as StudentsTable
+        rectangle "tools\n(id, name, description, slot)" as ToolsTable
+        rectangle "transactions\n(borrow/return records)" as TransactionsTable
+        rectangle "tool_compartment_assignments\n(tool-compartment mapping)" as AssignmentsTable
+        rectangle "alerts\n(overdue notifications)" as AlertsTable
+        rectangle "schema_migrations\n(version tracking)" as MigrationsTable
+    }
+    
+    SQLiteDB --> StudentsTable
+    SQLiteDB --> ToolsTable
+    SQLiteDB --> TransactionsTable
+    SQLiteDB --> AssignmentsTable
+    SQLiteDB --> AlertsTable
+    SQLiteDB --> MigrationsTable
+}
+
+' ==================== External Systems ====================
+package "Hardware & External" <<external>> {
+    rectangle "Hardware Controller\n(Compartment Unlock)" as Hardware
+    rectangle "Email System\n(Notifications)" as Email
+}
+
+' ==================== Connections ====================
+
+' Client to Server
+ReactApp --> ExpressServer: HTTP/REST\n(with Bearer Token)
+
+' Server to Repository
+StudentLogin --> InventoryRepo
+AdminLogin --> InventoryRepo
+QRLogin --> InventoryRepo
+QRValidate --> InventoryRepo
+StudentMe --> InventoryRepo
+ListTools --> InventoryRepo
+BorrowTool --> InventoryRepo
+ReturnTool --> InventoryRepo
+ActiveTx --> InventoryRepo
+AdminSummary --> InventoryRepo
+ListStudents --> InventoryRepo
+CreateStudent --> InventoryRepo
+UpdateStudent --> InventoryRepo
+DeleteStudent --> InventoryRepo
+StudentHistory --> InventoryRepo
+AuditLog --> InventoryRepo
+ExportCSV --> InventoryRepo
+AssignTool --> InventoryRepo
+ListAlerts --> InventoryRepo
+
+' Repository to Database
+InventoryRepo --> SQLiteDB: SQL Queries\n(Promises)
+
+' Hardware & External
+OpenCompartment --> Hardware: Unlock Command
+ReturnTool .-> Email: Notifications
+InventoryRepo .-> Email: Alert Notifications
+
+' ==================== Legend ====================
+legend right
+    |<#E1F5FE> Technical Infrastructure |
+    |<#F3E5F5> User Interface Layer |
+    |<#E8F5E9> Service/Business Logic |
+    |<#FFF3E0> Data Persistence |
+    |<#FFEBEE> External Systems |
+end legend
+
+@enduml
